@@ -323,11 +323,7 @@
               return withIgu(url);
             }
           }
-          return (
-            "https://translate.google.com/translate?sl=auto&tl=en&u=" +
-            encodeURIComponent(url) +
-            "&client=tw-ob"
-          );
+          return "/api/proxy?url=" + encodeURIComponent(url);
         }
         return withIgu("https://www.google.com/search?q=" + encodeURIComponent(value));
       }
@@ -414,6 +410,10 @@
 
       homeBtn.addEventListener("click", goHome);
       iframe.addEventListener("load", () => setLoading(false));
+      window.addEventListener("message", (e) => {
+        if (e.data && e.data.type === "prism-go" && e.data.url) go(e.data.url);
+        if (e.data && e.data.type === "prism-url" && e.data.url) urlInput.value = e.data.url;
+      });
       updateNav();
     </script>
   </body>

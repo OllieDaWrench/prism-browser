@@ -1,7 +1,6 @@
 {
   "framework": null,
   "buildCommand": "",
-  "installCommand": "echo skip",
   "outputDirectory": ".",
   "rewrites": [{ "source": "/", "destination": "/Prism.html" }]
 }
