@@ -220,6 +220,19 @@
         color: var(--text);
         border-color: #3d4658;
       }
+      #ver {
+        position: fixed;
+        right: 10px;
+        bottom: 8px;
+        z-index: 50;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+        background: rgba(16, 18, 24, 0.8);
+        padding: 3px 8px;
+        border-radius: 6px;
+        pointer-events: none;
+      }
     </style>
   </head>
   <body>
@@ -264,14 +277,15 @@
             <button type="submit">Go</button>
           </form>
           <div class="chips">
-            <button type="button" data-go="https://www.google.com/">Google</button>
-            <button type="button" data-go="https://en.wikipedia.org/">Wikipedia</button>
-            <button type="button" data-go="https://news.ycombinator.com/">Hacker News</button>
+            <button type="button" data-go="https://www.youtube.com/">YouTube</button>
+            <button type="button" data-go="https://chatgpt.com/">ChatGPT</button>
+            <button type="button" data-go="https://poki.com/">Poki</button>
           </div>
         </section>
         <iframe id="view" title="Page" hidden></iframe>
       </main>
     </div>
+    <div id="ver">1.16.0</div>
     <script>
       const iframe = document.getElementById("view");
       const start = document.getElementById("start");
@@ -323,7 +337,13 @@
               return withIgu(url);
             }
           }
-          return "/api/proxy?url=" + encodeURIComponent(url);
+          return (
+            "/r/" +
+            btoa(unescape(encodeURIComponent(url)))
+              .replace(/\+/g, "-")
+              .replace(/\//g, "_")
+              .replace(/=+$/g, "")
+          );
         }
         return withIgu("https://www.google.com/search?q=" + encodeURIComponent(value));
       }

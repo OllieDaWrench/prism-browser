@@ -4,8 +4,24 @@ const net = require("net");
 
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
-const PREFIX = "/api/proxy?url=";
 const jars = new Map();
+
+function encodeTarget(url) {
+  return Buffer.from(url, "utf8").toString("base64url");
+}
+
+function decodeTarget(s) {
+  if (!s) return null;
+  try {
+    const href = Buffer.from(s, "base64url").toString("utf8");
+    if (/^https?:\/\//i.test(href)) return href;
+  } catch {}
+  return null;
+}
+
+function wrap(url) {
+  return "/r/" + encodeTarget(url);
+}
 
 module.exports.config = {
   api: { bodyParser: false },
@@ -82,9 +98,9 @@ async function assertSafe(target) {
 function rewriteUrl(raw, base) {
   const s = String(raw).trim();
   if (!s || s.startsWith("#") || /^(javascript:|data:|mailto:|tel:|blob:)/i.test(s)) return raw;
-  if (s.includes("/api/proxy?url=") || s.startsWith("/proxy?url=")) return raw;
+  if (s.includes("/r/") || s.includes("/api/proxy")) return raw;
   try {
-    return PREFIX + encodeURIComponent(new URL(s, base).href);
+    return wrap(new URL(s, base).href);
   } catch {
     return raw;
   }
@@ -139,8 +155,9 @@ function injectScript(pageUrl) {
     if(!u) return u;
     var s=String(u);
     if(/^(javascript:|data:|mailto:|tel:|blob:|#)/i.test(s)) return s;
-    if(s.indexOf("/api/proxy?url=")!==-1||s.indexOf("/proxy?url=")!==-1) return s;
-    return ORIGIN+"/api/proxy?url="+encodeURIComponent(abs(s));
+    if(s.indexOf("/r/")!==-1||s.indexOf("/api/proxy")!==-1) return s;
+    var e=btoa(unescape(encodeURIComponent(abs(s)))).replace(/\\+/g,"-").replace(/\\//g,"_").replace(/=+$/,"");
+    return ORIGIN+"/r/"+e;
   }
   try{if(window.top!==window) window.top.postMessage({type:"prism-url",url:PAGE},"*")}catch(e){}
   if(navigator.serviceWorker){navigator.serviceWorker.register=function(){return Promise.reject(new Error("blocked"))}}
@@ -275,7 +292,7 @@ async function readBody(req) {
 
 module.exports = async function handler(req, res) {
   const incoming = requestUrl(req);
-  let target = incoming.searchParams.get("url");
+  let target = decodeTarget(incoming.searchParams.get("u")) || incoming.searchParams.get("url");
   if (!target) {
     res.statusCode = 400;
     res.setHeader("Content-Type", "text/html; charset=utf-8");
@@ -285,7 +302,7 @@ module.exports = async function handler(req, res) {
     try {
       const u = new URL(target);
       incoming.searchParams.forEach((value, key) => {
-        if (key !== "url") u.searchParams.append(key, value);
+        if (key !== "url" && key !== "u") u.searchParams.append(key, value);
       });
       target = u.href;
     } catch {}
