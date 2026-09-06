@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Prism</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <header class="chrome">
+        <div class="brand">Prism</div>
+        <div class="controls">
+          <button type="button" id="back" title="Back" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.5 5.5 8 12l7.5 6.5" /></svg>
+          </button>
+          <button type="button" id="fwd" title="Forward" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 5.5 16 12l-7.5 6.5" /></svg>
+          </button>
+          <button type="button" id="reload" title="Reload">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.2-5.5" /><path d="M20 5v5h-5" /></svg>
+          </button>
+        </div>
+        <form id="omnibox" autocomplete="off">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+          <input id="url" name="q" placeholder="Search or enter address" spellcheck="false" />
+        </form>
+        <button type="button" id="home" title="Home">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 4l8 7.5" /><path d="M7 10.5V20h10v-9.5" /></svg>
+        </button>
+      </header>
+      <div id="progress" hidden></div>
+      <main>
+        <section id="start">
+          <p class="kicker">Browse through Prism</p>
+          <h1>Search the web from here</h1>
+          <form id="start-form" autocomplete="off">
+            <input id="start-q" placeholder="Search or enter a site" spellcheck="false" />
+            <button type="submit">Go</button>
+          </form>
+          <div class="chips">
+            <button type="button" data-go="https://www.google.com/webhp?gbv=1">Google</button>
+            <button type="button" data-go="https://en.wikipedia.org/">Wikipedia</button>
+            <button type="button" data-go="https://news.ycombinator.com/">Hacker News</button>
+          </div>
+        </section>
+        <iframe
+          id="view"
+          title="Page"
+          hidden
+          sandbox="allow-scripts allow-forms allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads"
+        ></iframe>
+      </main>
+    </div>
+    <script src="/app.js"></script>
+  </body>
+</html>
