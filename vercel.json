@@ -4,6 +4,7 @@
   "outputDirectory": ".",
   "rewrites": [
     { "source": "/", "destination": "/Prism.html" },
-    { "source": "/r/:id", "destination": "/api/proxy?u=:id" }
+    { "source": "/r/:id", "destination": "/api/proxy?u=:id" },
+    { "source": "/:path*", "destination": "/api/proxy?rel=/:path*" }
   ]
 }

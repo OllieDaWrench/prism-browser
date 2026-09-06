@@ -39,12 +39,12 @@ function parseCookies(header) {
   return out;
 }
 
-function sidFrom(req, res) {
+function sidFrom(req, res, origin) {
   let sid = parseCookies(req.headers.cookie).prism_sid;
-  if (!sid) {
-    sid = crypto.randomBytes(16).toString("hex");
-    res.setHeader("Set-Cookie", `prism_sid=${sid}; Path=/; HttpOnly; SameSite=Lax`);
-  }
+  if (!sid) sid = crypto.randomBytes(16).toString("hex");
+  const cookies = [`prism_sid=${sid}; Path=/; HttpOnly; SameSite=Lax`];
+  if (origin) cookies.push(`prism_origin=${origin}; Path=/; SameSite=Lax`);
+  res.setHeader("Set-Cookie", cookies);
   return sid;
 }
 
@@ -161,6 +161,21 @@ function injectScript(pageUrl) {
   }
   try{if(window.top!==window) window.top.postMessage({type:"prism-url",url:PAGE},"*")}catch(e){}
   if(navigator.serviceWorker){navigator.serviceWorker.register=function(){return Promise.reject(new Error("blocked"))}}
+  ["pushState","replaceState"].forEach(function(k){
+    var orig=history[k];
+    history[k]=function(state,title,url){
+      if(url){
+        try{
+          var next=abs(String(url));
+          if(next.split("#")[0]!==PAGE.split("#")[0]){
+            window.top.postMessage({type:"prism-go",url:next},"*");
+            return;
+          }
+        }catch(err){}
+      }
+      return orig.apply(this,arguments);
+    };
+  });
   document.addEventListener("click",function(e){
     var a=e.target.closest&&e.target.closest("a");
     if(!a) return;
@@ -302,20 +317,22 @@ module.exports = async function handler(req, res) {
 
 async function proxy(req, res) {
   const incoming = requestUrl(req);
+  const cookies = parseCookies(req.headers.cookie);
   let target = decodeTarget(incoming.searchParams.get("u")) || incoming.searchParams.get("url");
+  const rel = incoming.searchParams.get("rel");
+  if (!target && rel && cookies.prism_origin) {
+    try {
+      const dest = new URL(rel, cookies.prism_origin + "/");
+      incoming.searchParams.forEach((value, key) => {
+        if (!["url", "u", "rel", "id"].includes(key)) dest.searchParams.append(key, value);
+      });
+      target = dest.href;
+    } catch {}
+  }
   if (!target) {
     res.statusCode = 400;
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     return res.end(errorPage("Missing url", ""));
-  }
-  if (req.method === "GET" || req.method === "HEAD") {
-    try {
-      const u = new URL(target);
-      incoming.searchParams.forEach((value, key) => {
-        if (key !== "url" && key !== "u") u.searchParams.append(key, value);
-      });
-      target = u.href;
-    } catch {}
   }
 
   let parsed;
@@ -327,7 +344,7 @@ async function proxy(req, res) {
     return res.end(errorPage(e.message, target));
   }
 
-  const sid = sidFrom(req, res);
+  const sid = sidFrom(req, res, parsed.origin);
   const jar = jars.get(sid) || new Map();
   jars.set(sid, jar);
 
