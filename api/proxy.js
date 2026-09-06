@@ -174,18 +174,50 @@ function injectScript(pageUrl) {
       return orig.apply(this,arguments);
     };
   });
+  function ytWatch(u){
+    try{
+      var x=new URL(u);
+      var host=x.hostname.replace(/^www\\./,"");
+      var id=x.searchParams.get("v");
+      if(host==="youtu.be") id=x.pathname.replace(/^\\//,"").split("/")[0];
+      if(host==="youtube.com"||host==="m.youtube.com"||host==="youtu.be"||host.indexOf(".youtube.com")!==-1){
+        if(x.pathname.indexOf("/embed/")===0) return u;
+        if(x.pathname.indexOf("/shorts/")===0) id=x.pathname.split("/")[2];
+        if(id) return "https://www.youtube.com/embed/"+id+"?autoplay=1";
+      }
+    }catch(err){}
+    return u;
+  }
+  var onYt=PAGE.indexOf("youtube.com")!==-1||PAGE.indexOf("youtu.be")!==-1;
+  document.addEventListener("keydown",function(e){
+    if(!onYt||e.key!=="Enter") return;
+    var el=e.target;
+    if(!el||(el.tagName!=="INPUT"&&el.tagName!=="TEXTAREA")) return;
+    var q=el.value;
+    if(!q) return;
+    e.preventDefault();
+    e.stopPropagation();
+    window.top.postMessage({type:"prism-go",url:"https://www.youtube.com/results?search_query="+encodeURIComponent(q)},"*");
+  },true);
   document.addEventListener("click",function(e){
     var a=e.target.closest&&e.target.closest("a");
     if(!a) return;
     var href=a.getAttribute("href");
     if(!href||/^(javascript:|mailto:|tel:|#)/i.test(href)) return;
     e.preventDefault();
-    var next=abs(href);
-    try{window.top.postMessage({type:"prism-go",url:next},"*")}catch(err){location.href=prox(href)}
+    var next=ytWatch(abs(href));
+    try{window.top.postMessage({type:"prism-go",url:next},"*")}catch(err){location.href=prox(next)}
   },true);
   document.addEventListener("submit",function(e){
     var f=e.target;
     if(!f||f.tagName!=="FORM") return;
+    if(onYt){
+      e.preventDefault();
+      var box=f.querySelector("[name=search_query],input[type=search]");
+      var q=box&&box.value;
+      if(q) window.top.postMessage({type:"prism-go",url:"https://www.youtube.com/results?search_query="+encodeURIComponent(q)},"*");
+      return;
+    }
     var action=f.getAttribute("action")||PAGE;
     var method=(f.getAttribute("method")||"get").toLowerCase();
     if(method==="get"){

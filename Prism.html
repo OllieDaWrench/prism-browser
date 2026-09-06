@@ -285,7 +285,7 @@
         <iframe id="view" title="Page" hidden></iframe>
       </main>
     </div>
-    <div id="ver">1.16.3</div>
+    <div id="ver">1.17.0</div>
     <script>
       const iframe = document.getElementById("view");
       const start = document.getElementById("start");
@@ -323,11 +323,31 @@
         }
       }
 
+      function youtubeEmbed(url) {
+        try {
+          const u = new URL(url);
+          const host = u.hostname.replace(/^www\./, "");
+          let id = u.searchParams.get("v");
+          if (host === "youtu.be") id = u.pathname.replace(/^\//, "").split("/")[0];
+          if (
+            host === "youtube.com" ||
+            host === "m.youtube.com" ||
+            host === "youtu.be" ||
+            host.endsWith(".youtube.com")
+          ) {
+            if (u.pathname.startsWith("/embed/")) return url;
+            if (u.pathname.startsWith("/shorts/")) id = u.pathname.split("/")[2];
+            if (id) return "https://www.youtube.com/embed/" + id + "?autoplay=1";
+          }
+        } catch {}
+        return url;
+      }
+
       function toFrame(raw) {
         const value = raw.trim();
         if (!value) return null;
         if (/^https?:\/\//i.test(value) || looksLikeUrl(value)) {
-          const url = /^https?:\/\//i.test(value) ? value : "https://" + value;
+          const url = youtubeEmbed(/^https?:\/\//i.test(value) ? value : "https://" + value);
           if (isGoogle(url)) {
             try {
               const u = new URL(url);
