@@ -43,7 +43,7 @@ function sidFrom(req, res) {
   let sid = parseCookies(req.headers.cookie).prism_sid;
   if (!sid) {
     sid = crypto.randomBytes(16).toString("hex");
-    res.append("Set-Cookie", `prism_sid=${sid}; Path=/; HttpOnly; SameSite=Lax`);
+    res.setHeader("Set-Cookie", `prism_sid=${sid}; Path=/; HttpOnly; SameSite=Lax`);
   }
   return sid;
 }
@@ -291,6 +291,16 @@ async function readBody(req) {
 }
 
 module.exports = async function handler(req, res) {
+  try {
+    return await proxy(req, res);
+  } catch (e) {
+    res.statusCode = 500;
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    return res.end(errorPage(e.message || "Proxy failed", ""));
+  }
+};
+
+async function proxy(req, res) {
   const incoming = requestUrl(req);
   let target = decodeTarget(incoming.searchParams.get("u")) || incoming.searchParams.get("url");
   if (!target) {
