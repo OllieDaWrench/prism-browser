@@ -167,10 +167,8 @@ function injectScript(pageUrl) {
       if(url){
         try{
           var next=abs(String(url));
-          if(next.split("#")[0]!==PAGE.split("#")[0]){
-            window.top.postMessage({type:"prism-go",url:next},"*");
-            return;
-          }
+          arguments[2]=prox(next);
+          window.top.postMessage({type:"prism-url",url:next},"*");
         }catch(err){}
       }
       return orig.apply(this,arguments);
@@ -218,21 +216,6 @@ function injectScript(pageUrl) {
     if(/^(src|href|poster|action)$/i.test(n)) v=prox(v);
     return osa.call(this,n,v);
   };
-  function hook(proto,prop){
-    var d=Object.getOwnPropertyDescriptor(proto,prop);
-    if(!d||!d.set) return;
-    Object.defineProperty(proto,prop,{
-      configurable:true,
-      set:function(v){d.set.call(this,prox(v))},
-      get:function(){return d.get.call(this)}
-    });
-  }
-  try{
-    hook(HTMLMediaElement.prototype,"src");
-    hook(HTMLImageElement.prototype,"src");
-    hook(HTMLScriptElement.prototype,"src");
-    hook(HTMLIFrameElement.prototype,"src");
-  }catch(e){}
 })();</script>`;
 }
 
@@ -240,19 +223,27 @@ function rewriteHtml(html, pageUrl) {
   html = html.replace(/<base\b[^>]*>/gi, "");
   html = html.replace(/<meta\b[^>]*http-equiv=["']?content-security-policy["']?[^>]*>/gi, "");
   html = html.replace(/\s(?:integrity|nonce)=["'][^"']*["']/gi, "");
-  html = html.replace(
-    /((?:href|src|action|poster|formaction|data-src|data-href|cite)\s*=\s*)(["'])([^"']*)\2/gi,
-    (m, pre, q, u) => pre + q + rewriteUrl(u, pageUrl) + q
-  );
-  html = html.replace(
-    /(\ssrcset\s*=\s*)(["'])([^"']*)\2/gi,
-    (m, pre, q, u) => pre + q + rewriteSrcset(u, pageUrl) + q
-  );
-  html = html.replace(
-    /(<style\b[^>]*>)([\s\S]*?)(<\/style>)/gi,
-    (m, a, css, b) => a + rewriteCss(css, pageUrl) + b
-  );
-  html = html.replace(/\sstyle=(["'])([\s\S]*?)\1/gi, (m, q, css) => ` style=${q}${rewriteCss(css, pageUrl)}${q}`);
+  const heavy = html.length > 250000 || /youtube\.com|youtu\.be/i.test(pageUrl);
+  if (heavy) {
+    html = html.replace(
+      /(<(?:script|link)\b[^>]*\s(?:src|href)\s*=\s*)(["'])([^"']*)\2/gi,
+      (m, pre, q, u) => pre + q + rewriteUrl(u, pageUrl) + q
+    );
+  } else {
+    html = html.replace(
+      /((?:href|src|action|poster|formaction|data-src|data-href|cite)\s*=\s*)(["'])([^"']*)\2/gi,
+      (m, pre, q, u) => pre + q + rewriteUrl(u, pageUrl) + q
+    );
+    html = html.replace(
+      /(\ssrcset\s*=\s*)(["'])([^"']*)\2/gi,
+      (m, pre, q, u) => pre + q + rewriteSrcset(u, pageUrl) + q
+    );
+    html = html.replace(
+      /(<style\b[^>]*>)([\s\S]*?)(<\/style>)/gi,
+      (m, a, css, b) => a + rewriteCss(css, pageUrl) + b
+    );
+    html = html.replace(/\sstyle=(["'])([\s\S]*?)\1/gi, (m, q, css) => ` style=${q}${rewriteCss(css, pageUrl)}${q}`);
+  }
   const inject = injectScript(pageUrl);
   if (/<head[^>]*>/i.test(html)) return html.replace(/<head[^>]*>/i, (m) => m + inject);
   if (/<html[^>]*>/i.test(html)) return html.replace(/<html[^>]*>/i, (m) => m + inject);

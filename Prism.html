@@ -285,7 +285,7 @@
         <iframe id="view" title="Page" hidden></iframe>
       </main>
     </div>
-    <div id="ver">1.16.2</div>
+    <div id="ver">1.16.3</div>
     <script>
       const iframe = document.getElementById("view");
       const start = document.getElementById("start");
@@ -382,9 +382,16 @@
         document.getElementById("start-q").focus();
       }
 
+      let lastSrc = "";
+      let lastAt = 0;
+
       function go(raw, { push = true } = {}) {
         const src = toFrame(raw);
         if (!src) return;
+        const now = Date.now();
+        if (src === lastSrc && now - lastAt < 1000) return;
+        lastSrc = src;
+        lastAt = now;
         urlInput.value = toDisplay(raw);
         showBrowser();
         setLoading(true);
