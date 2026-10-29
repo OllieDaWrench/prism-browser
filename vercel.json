@@ -1,10 +1,12 @@
 {
   "framework": null,
   "buildCommand": "",
-  "outputDirectory": ".",
+  "outputDirectory": "public",
   "rewrites": [
-    { "source": "/", "destination": "/Prism.html" },
-    { "source": "/r/:id", "destination": "/api/proxy?u=:id" },
-    { "source": "/:path*", "destination": "/api/proxy?rel=/:path*" }
+    { "source": "/live/status", "destination": "/api/live" },
+    { "source": "/https/:path*", "destination": "/api/proxy?__path=https/:path*" },
+    { "source": "/http/:path*", "destination": "/api/proxy?__path=http/:path*" },
+    { "source": "/p/:path*", "destination": "/api/proxy?__path=p/:path*" },
+    { "source": "/proxy", "destination": "/api/proxy" }
   ]
 }
