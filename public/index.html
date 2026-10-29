@@ -19,40 +19,79 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 5.5 16 12l-7.5 6.5" /></svg>
           </button>
           <button type="button" id="reload" title="Reload">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.2-5.5" /><path d="M20 5v5h-5" /></svg>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M20 12a8 8 0 1 1-2.2-5.5" /><path d="M20 5v5h-5" />
+            </svg>
           </button>
         </div>
         <form id="omnibox" autocomplete="off">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
-          <input id="url" name="q" placeholder="Search or enter address" spellcheck="false" />
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
+          </svg>
+          <input id="url" name="q" placeholder="Search Google or enter address" spellcheck="false" />
         </form>
+        <button type="button" id="engine" class="engine" title="Choose how Prism loads pages">
+          <span class="dot"></span><span id="engine-label">Proxy</span>
+        </button>
         <button type="button" id="home" title="Home">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 4l8 7.5" /><path d="M7 10.5V20h10v-9.5" /></svg>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 11.5 12 4l8 7.5" /><path d="M7 10.5V20h10v-9.5" />
+          </svg>
         </button>
       </header>
       <div id="progress" hidden></div>
+      <div id="banner" hidden>
+        <span id="banner-text"></span>
+        <button type="button" id="banner-action">Switch to Live</button>
+        <button type="button" id="banner-close" class="ghost" title="Dismiss">✕</button>
+      </div>
       <main>
         <section id="start">
           <p class="kicker">Browse through Prism</p>
-          <h1>Search the web from here</h1>
+          <h1 id="start-title">Search the web from here</h1>
           <form id="start-form" autocomplete="off">
             <input id="start-q" placeholder="Search or enter a site" spellcheck="false" />
             <button type="submit">Go</button>
           </form>
           <div class="chips">
-            <button type="button" data-go="https://www.google.com/webhp?gbv=1">Google</button>
+            <button type="button" data-go="https://www.google.com/">Google</button>
             <button type="button" data-go="https://en.wikipedia.org/">Wikipedia</button>
             <button type="button" data-go="https://news.ycombinator.com/">Hacker News</button>
+            <button type="button" data-go="https://chatgpt.com/">ChatGPT</button>
+            <button type="button" data-go="https://www.reddit.com/">Reddit</button>
+            <button type="button" data-go="https://www.youtube.com/">YouTube</button>
           </div>
+          <p class="engine-note" id="engine-note"></p>
         </section>
         <iframe
           id="view"
           title="Page"
           hidden
-          sandbox="allow-scripts allow-forms allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads"
+          referrerpolicy="no-referrer-when-downgrade"
+          sandbox="allow-scripts allow-forms allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads allow-pointer-lock"
         ></iframe>
+        <div id="live" hidden>
+          <img id="live-frame" alt="" draggable="false" />
+          <input
+            id="live-input"
+            type="text"
+            autocomplete="off"
+            autocapitalize="off"
+            spellcheck="false"
+            aria-label="Live page input"
+          />
+          <div id="live-overlay" hidden>
+            <div class="live-card">
+              <h2>Live mode unavailable</h2>
+              <p id="live-reason"></p>
+              <p class="hint" id="live-hint"></p>
+              <button type="button" id="live-fallback">Use proxy mode instead</button>
+            </div>
+          </div>
+        </div>
       </main>
     </div>
+    <div id="ver">2.0.0</div>
     <script src="/app.js"></script>
   </body>
 </html>

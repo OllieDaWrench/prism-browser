@@ -1,13 +1,18 @@
 {
   "name": "prism",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
-  "description": "In-page proxy browser",
+  "description": "In-page proxy browser with a path-mapped proxy engine and a real-browser live engine",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test \"test/*.test.js\""
   },
   "dependencies": {
     "express": "^4.21.2"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }
