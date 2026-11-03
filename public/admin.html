@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Prism — who has access</title>
+    <style>
+      :root { --gold: #e2b657; --ink: #0d0d0f; --panel: #17171b; --line: rgba(226, 182, 87, 0.18); --muted: #9a958c; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; padding: 32px 20px 60px; min-height: 100vh;
+        background: radial-gradient(900px 600px at 50% -10%, #241f14 0%, var(--ink) 60%);
+        color: #f3efe6; font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      }
+      .wrap { max-width: 760px; margin: 0 auto; }
+      header { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
+      h1 { margin: 0; font-size: 24px; letter-spacing: -0.02em; }
+      h1 span { color: var(--gold); }
+      .who { color: var(--muted); font-size: 13px; }
+      .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 20px; margin-bottom: 18px; }
+      h2 { margin: 0 0 14px; font-size: 15px; letter-spacing: 0.02em; }
+      label { display: block; margin: 0 0 5px; font-size: 12px; color: var(--muted); }
+      input {
+        width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.12);
+        background: #101014; color: #f3efe6; font-size: 15px;
+      }
+      input:focus { outline: 2px solid rgba(226, 182, 87, 0.45); outline-offset: 1px; border-color: var(--gold); }
+      .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+      .row + .row { margin-top: 12px; }
+      button {
+        padding: 10px 16px; border: 0; border-radius: 10px; cursor: pointer; font-size: 14px; font-weight: 600;
+        background: var(--gold); color: #201a0c;
+      }
+      button.ghost { background: transparent; color: #f3efe6; border: 1px solid rgba(255, 255, 255, 0.18); font-weight: 500; }
+      button.quiet { background: transparent; color: var(--muted); border: 1px solid rgba(255, 255, 255, 0.12); font-weight: 400; font-size: 13px; }
+      button:disabled { opacity: 0.55; cursor: default; }
+      table { width: 100%; border-collapse: collapse; font-size: 14px; }
+      th { text-align: left; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+        padding: 0 8px 8px; font-weight: 500; }
+      td { padding: 10px 8px; border-top: 1px solid rgba(255, 255, 255, 0.07); vertical-align: middle; }
+      td.num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.06em; }
+      .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; }
+      .pill.on { background: rgba(112, 196, 134, 0.14); color: #8fd6a6; }
+      .pill.off { background: rgba(226, 84, 84, 0.14); color: #f0b4b4; }
+      .pill.owner { background: rgba(226, 182, 87, 0.14); color: var(--gold); }
+      .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+      .note { margin: 0 0 14px; padding: 11px 12px; border-radius: 10px; font-size: 12.5px; line-height: 1.6; }
+      .note[hidden] { display: none; }
+      .note.warn { background: rgba(226, 182, 87, 0.08); border: 1px solid rgba(226, 182, 87, 0.3); color: #d8c9a4; }
+      .note.bad { background: rgba(226, 84, 84, 0.1); border: 1px solid rgba(226, 84, 84, 0.35); color: #f0b4b4; }
+      .note.good { background: rgba(112, 196, 134, 0.1); border: 1px solid rgba(112, 196, 134, 0.35); color: #a7e0bb; }
+      .command { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+      code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background: rgba(255,255,255,0.08);
+        padding: 6px 9px; border-radius: 8px; font-size: 12.5px; word-break: break-all; }
+      .empty { color: var(--muted); font-size: 13px; padding: 6px 0; }
+      a { color: var(--gold); }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <h1>Prism <span>/ access</span></h1>
+        <div class="who">
+          signed in as <strong id="me">…</strong>
+          &nbsp;·&nbsp; <a href="/">open Prism</a>
+          &nbsp;·&nbsp; <button class="quiet" id="logout">Sign out</button>
+        </div>
+      </header>
+
+      <p class="note warn" id="storage" hidden></p>
+      <p class="note bad" id="error" hidden></p>
+      <p class="note good" id="ok" hidden></p>
+
+      <div class="card">
+        <h2>Give someone access</h2>
+        <form id="add">
+          <div class="row">
+            <div>
+              <label for="number">Six-digit number</label>
+              <input id="number" name="number" inputmode="numeric" pattern="[0-9]{6}" maxlength="7" placeholder="482913" required />
+            </div>
+            <div>
+              <label for="name">Name (optional)</label>
+              <input id="name" name="name" placeholder="Sam" />
+            </div>
+          </div>
+          <div class="row">
+            <div>
+              <label for="password">Password (6+ characters)</label>
+              <input id="password" name="password" type="text" autocomplete="new-password" placeholder="tell them this" required />
+            </div>
+            <div>
+              <label for="role">Can they manage access?</label>
+              <input id="role" name="role" placeholder="no" />
+            </div>
+          </div>
+          <div style="margin-top: 14px"><button type="submit" id="add-button">Add account</button></div>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>People with access</h2>
+        <div class="empty" id="empty" hidden>No accounts yet.</div>
+        <div id="list"></div>
+      </div>
+
+      <div class="card">
+        <h2>The install command</h2>
+        <p class="note warn" style="margin-bottom: 12px">
+          Send this with the number and password — the command asks for them, then downloads Prism.
+        </p>
+        <div class="command">
+          <code id="install-command">curl -fsSL /install.sh | bash</code>
+          <button class="ghost" id="copy">Copy</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        var host = document.getElementById("list");
+        var empty = document.getElementById("empty");
+        var storageNote = document.getElementById("storage");
+        var errorBox = document.getElementById("error");
+        var okBox = document.getElementById("ok");
+
+        function fail(message) {
+          okBox.hidden = true;
+          errorBox.textContent = message;
+          errorBox.hidden = false;
+        }
+        function succeed(message) {
+          errorBox.hidden = true;
+          okBox.textContent = message;
+          okBox.hidden = false;
+          setTimeout(function () { okBox.hidden = true; }, 4000);
+        }
+        function api(url, options) {
+          return fetch(url, Object.assign({ headers: { "Content-Type": "application/json" }, cache: "no-store" }, options))
+            .then(function (r) {
+              return r.json().catch(function () { return {}; }).then(function (body) {
+                if (!r.ok || body.ok === false) throw new Error(body.error || "Something went wrong.");
+                return body;
+              });
+            });
+        }
+
+        function render(users, canWrite, storage, me) {
+          document.getElementById("me").textContent = me;
+          if (storage !== "kv" || !canWrite) {
+            storageNote.hidden = false;
+            storageNote.textContent = storage === "kv"
+              ? "Accounts are in Upstash, but this copy cannot change them."
+              : storage === "env"
+                ? "Accounts come from the PRISM_USERS environment variable, which cannot be edited from this page. Connect Upstash to add people here."
+                : "This copy has no permanent storage, so accounts added here would be lost on the next deploy. Connect Upstash to keep them.";
+          } else {
+            storageNote.hidden = true;
+          }
+
+          if (!users.length) {
+            empty.hidden = false;
+            host.innerHTML = "";
+            return;
+          }
+          empty.hidden = true;
+
+          var table = document.createElement("table");
+          var head = document.createElement("tr");
+          ["Number", "Name", "State", "Actions"].forEach(function (label) {
+            var th = document.createElement("th");
+            th.textContent = label;
+            head.appendChild(th);
+          });
+          table.appendChild(head);
+
+          var body = document.createElement("tbody");
+          users.forEach(function (user) {
+            var tr = document.createElement("tr");
+
+            var num = document.createElement("td");
+            num.className = "num";
+            num.textContent = user.number;
+            tr.appendChild(num);
+
+            var name = document.createElement("td");
+            name.textContent = user.name || "—";
+            tr.appendChild(name);
+
+            var state = document.createElement("td");
+            var pill = document.createElement("span");
+            pill.className = "pill " + (user.active ? "on" : "off");
+            pill.textContent = user.active ? "on" : "off";
+            state.appendChild(pill);
+            if (user.role === "admin") {
+              var owner = document.createElement("span");
+              owner.className = "pill owner";
+              owner.textContent = "manager";
+              owner.style.marginLeft = "6px";
+              state.appendChild(owner);
+            }
+            if (user.number === me) {
+              var you = document.createElement("span");
+              you.className = "pill";
+              you.textContent = "you";
+              you.style.marginLeft = "6px";
+              you.style.color = "#9a958c";
+              state.appendChild(you);
+            }
+            tr.appendChild(state);
+
+            var cell = document.createElement("td");
+            var actions = document.createElement("div");
+            actions.className = "actions";
+
+            var toggle = document.createElement("button");
+            toggle.className = "quiet";
+            toggle.textContent = user.active ? "Switch off" : "Switch on";
+            toggle.onclick = function () {
+              api("/api/auth/users", {
+                method: "POST",
+                body: JSON.stringify({ action: "update", number: user.number, active: !user.active })
+              }).then(function () { succeed(user.active ? "Access switched off." : "Access switched on."); load(); })
+                .catch(function (e) { fail(e.message); });
+            };
+            actions.appendChild(toggle);
+
+            var reset = document.createElement("button");
+            reset.className = "quiet";
+            reset.textContent = "New password";
+            reset.onclick = function () {
+              var next = prompt("New password for " + user.number + " (6+ characters):");
+              if (!next) return;
+              api("/api/auth/users", {
+                method: "POST",
+                body: JSON.stringify({ action: "update", number: user.number, password: next })
+              }).then(function () { succeed("Password changed."); })
+                .catch(function (e) { fail(e.message); });
+            };
+            actions.appendChild(reset);
+
+            var remove = document.createElement("button");
+            remove.className = "quiet";
+            remove.textContent = "Remove";
+            remove.onclick = function () {
+              if (!confirm("Remove access for " + user.number + "?")) return;
+              api("/api/auth/users", {
+                method: "POST",
+                body: JSON.stringify({ action: "remove", number: user.number })
+              }).then(function () { succeed("Access removed."); load(); })
+                .catch(function (e) { fail(e.message); });
+            };
+            actions.appendChild(remove);
+
+            cell.appendChild(actions);
+            tr.appendChild(cell);
+            body.appendChild(tr);
+          });
+          table.appendChild(body);
+          host.innerHTML = "";
+          host.appendChild(table);
+        }
+
+        var me = null;
+        function load() {
+          api("/api/auth/users").then(function (body) {
+            me = body.me;
+            render(body.users, body.canWrite, body.storage, body.me);
+          }).catch(function (e) {
+            if (/sign in/i.test(e.message)) location.replace("/login");
+            else fail(e.message);
+          });
+        }
+
+        document.getElementById("install-command").textContent =
+          "curl -fsSL " + location.origin + "/install.sh | bash";
+
+        document.getElementById("copy").onclick = function () {
+          var text = document.getElementById("install-command").textContent;
+          navigator.clipboard.writeText(text).then(function () { succeed("Command copied."); }, function () {
+            fail("Could not copy — select the text and copy it manually.");
+          });
+        };
+
+        document.getElementById("add").addEventListener("submit", function (event) {
+          event.preventDefault();
+          var manager = document.getElementById("role").value.trim().toLowerCase();
+          var button = document.getElementById("add-button");
+          button.disabled = true;
+          api("/api/auth/users", {
+            method: "POST",
+            body: JSON.stringify({
+              action: "add",
+              number: document.getElementById("number").value,
+              password: document.getElementById("password").value,
+              name: document.getElementById("name").value,
+              role: manager === "yes" || manager === "y" || manager === "admin" || manager === "true" ? "admin" : "user"
+            })
+          }).then(function (body) {
+            succeed("Access granted to " + body.user.number + ".");
+            document.getElementById("add").reset();
+            load();
+          }).catch(function (e) { fail(e.message); })
+            .then(function () { button.disabled = false; });
+        });
+
+        document.getElementById("logout").onclick = function () {
+          fetch("/api/auth/logout", { method: "POST" })
+            .then(function () { location.replace("/login"); })
+            .catch(function () { location.replace("/login"); });
+        };
+
+        load();
+      })();
+    </script>
+  </body>
+</html>

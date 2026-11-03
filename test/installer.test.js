@@ -195,3 +195,34 @@ test("a non-macOS system gets an explanation instead of a half install", async (
 test("the fallback is the stable release asset, never a GitHub page", () => {
   assert.match(FALLBACK_URL, /releases\/latest\/download\/Prism-macOS\.zip$/);
 });
+
+test("the installer asks for a six-digit number and password before downloading", () => {
+  const script = installerScript("https://prism.example");
+
+  // without this prompt, anyone with the one-liner gets the bundle
+  assert.match(script, /Six-digit number:/);
+  assert.match(script, /Password:/);
+  assert.match(script, /stty -echo/, "the password must not be echoed");
+  assert.match(script, /\/api\/auth\/token/, "credentials are exchanged for a token");
+  assert.match(script, /\?token=/, "the download carries that token");
+
+  // only prompt when the site says it is private: a copy with no secret has
+  // nobody to sign in as
+  assert.match(script, /"configured":true/);
+
+  // non-interactive runs get a clear message instead of hanging on /dev/tty
+  assert.match(script, /PRISM_NUMBER/);
+  assert.match(script, /PRISM_PASSWORD/);
+});
+
+test("the generated installer is valid shell", () => {
+  const fs = require("node:fs");
+  const os = require("node:os");
+  const path = require("node:path");
+  const { execFileSync } = require("node:child_process");
+
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "prism-inst-")), "install.sh");
+  fs.writeFileSync(file, installerScript("https://prism.example"));
+  // bash -n parses without running: the cheapest guard against a broken one-liner
+  execFileSync("bash", ["-n", file]);
+});

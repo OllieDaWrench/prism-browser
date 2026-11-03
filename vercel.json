@@ -12,6 +12,8 @@
   },
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api/:path*" },
+    { "source": "/admin", "destination": "/admin.html" },
+    { "source": "/login", "destination": "/gate.html" },
     { "source": "/live/status", "destination": "/api/live" },
     { "source": "/live/warm", "destination": "/api/live" },
     { "source": "/install.sh", "destination": "/api/install" },
