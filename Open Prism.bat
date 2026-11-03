@@ -13,7 +13,14 @@ rem Windows may show "Windows protected your PC" the first time (SmartScreen,
 rem for files downloaded from the internet). Click "More info" -> "Run anyway";
 rem it does not ask for an administrator password.
 
-echo Prism
+for /f "delims=" %%V in ('powershell -NoProfile -Command "(Get-Content -Raw package.json | ConvertFrom-Json).version" 2^>nul') do set "PRISM_VERSION=%%V"
+if not defined PRISM_VERSION set "PRISM_VERSION=unknown"
+
+if /i "%~1"=="--version" (
+  echo Prism v!PRISM_VERSION!
+  exit /b 0
+)
+echo Prism v!PRISM_VERSION!
 echo -----
 
 if not defined PRISM_NODE_VERSION set "PRISM_NODE_VERSION=22.20.0"

@@ -43,6 +43,21 @@ download, no installer, no password. Dependencies are already vendored in `node_
 is no `npm install`. Later launches skip straight to starting the app. Delete the folder (including
 `runtime/`) to remove Prism.
 
+### Terminal commands (macOS)
+
+`Open Prism.command` prints the Prism version every time it starts. From Terminal, these commands
+check the installed version and update the app:
+
+```bash
+"$HOME/Prism/Open Prism.command" --version
+"$HOME/Prism/Open Prism.command" --update
+```
+
+Close Prism before updating. The update downloads the current app bundle and replaces the app files,
+but preserves `runtime/` and `.chrome-profile/`; it does not redownload Node or discard the local
+browser profile. The invite-only download may prompt you to sign in. If you installed Prism in a
+custom folder, use that folder's `Open Prism.command` path instead.
+
 ### macOS: installing without the "cannot verify" warning
 
 macOS quarantines anything a browser downloads, and Gatekeeper refuses to run it unless the developer
@@ -223,9 +238,9 @@ What Prism does instead (`lib/botwall.js`):
    `x-iinfo`, …) and page signatures. Ordinary pages that merely *mention* Cloudflare are not flagged.
 2. **Never renders the dead interstitial.** It serves its own explanation instead, carrying the
    `X-Prism-Blocked` header and a message to the UI.
-3. **Escalates to Live mode automatically** when a browser is available — the page is reopened in
-   your own Chrome, on your own network. You can then complete the challenge yourself; Prism tells
-   you to click the checkbox if one appears.
+3. **Escalates to Live mode automatically** when a browser is available — the page is opened in a
+   locally installed Chromium browser on your network. You can complete a check if the site offers
+   one, but the site can still challenge or block that browser, account or network.
 4. **Explains the local escape hatch** when Live mode is not available (for example on the hosted
    copy, where serverless cannot run a browser).
 
@@ -242,9 +257,10 @@ The proxy engine sends a self-consistent Chrome fingerprint (client hints matchi
 fetch metadata describing its own request) which gets past simple WAF rules, but that is a
 best-effort improvement — a genuine challenge is a hard wall for any proxy.
 
-**Bottom line:** if a site is Cloudflare-protected, use Live mode, and run Prism locally so the
-request comes from your own IP with your own browser. On a datacenter-hosted copy (Vercel) those
-sites will keep challenging, because the traffic is not yours.
+**Bottom line:** Live mode uses a browser running locally and may work where the hosted proxy does
+not. It is not a Cloudflare bypass and cannot guarantee access. If YouTube still shows a challenge,
+try it in your everyday browser outside Prism; if that is blocked too, the restriction is likely
+outside Prism (for example, the site's decision about the account or network).
 
 ## How the proxy engine works
 

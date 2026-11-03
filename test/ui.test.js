@@ -125,6 +125,21 @@ function submit(window, selector, value) {
   form.dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
 }
 
+test("the local start screen shows terminal version/update commands but hosted copy hides them", { skip: !JSDOM && "jsdom not installed" }, async () => {
+  const local = makeUi(false);
+  await tick();
+  const localCommands = local.window.document.getElementById("terminal-commands");
+  assert.equal(localCommands.hidden, false);
+  assert.match(localCommands.textContent, /--version/);
+  assert.match(localCommands.textContent, /--update/);
+  local.window.close();
+
+  const hosted = makeUi(false, { hosted: true });
+  await tick();
+  assert.equal(hosted.window.document.getElementById("terminal-commands").hidden, true);
+  hosted.window.close();
+});
+
 test("proxy-only machine: search goes to the HTML search endpoint", { skip: !JSDOM && "jsdom not installed" }, async () => {
   const dom = makeUi(false);
   const { window } = dom;
@@ -229,6 +244,12 @@ test("live machine: js-heavy sites open in the live engine and stream frames", {
   await tick();
   const nav = sockets[0].sent.find((m) => m.t === "nav");
   assert.equal(nav.url, "https://reddit.com/");
+
+  // YouTube is also explicitly routed to Live in Auto mode, not through the hosted proxy.
+  submit(window, "#url", "youtube.com");
+  await tick();
+  const youtubeNav = sockets[0].sent.filter((m) => m.t === "nav").at(-1);
+  assert.equal(youtubeNav.url, "https://youtube.com/");
   dom.window.close();
 });
 
@@ -409,10 +430,10 @@ test("a live-mode challenge points at the checkbox instead of hanging", async ()
   await tick();
 
   const bannerText = window.document.getElementById("banner-text").textContent;
-  assert.match(bannerText, /does not trust the browser Prism started/);
+  assert.match(bannerText, /is challenging the browser Prism started/);
   assert.match(bannerText, /checkbox/);
-  // and it offers the route that actually works: the user's own browser
-  assert.equal(window.document.getElementById("banner-action").textContent, "Open in my Chrome");
+  // and it offers the everyday browser, without promising that this will bypass a block
+  assert.equal(window.document.getElementById("banner-action").textContent, "Open in browser");
   dom.window.close();
 });
 

@@ -48,6 +48,9 @@ test("the UI links to exactly those urls", () => {
   // no "install Node first" requirement any more: the bundle carries it
   assert.doesNotMatch(html, /nodejs\.org/);
   assert.match(html, /admin rights/);
+  assert.match(html, /id="terminal-commands" hidden/);
+  assert.match(html, /"\$HOME\/Prism\/Open Prism\.command" --version/);
+  assert.match(html, /"\$HOME\/Prism\/Open Prism\.command" --update/);
 });
 
 test("app.js uses the same same-origin urls", () => {
@@ -96,6 +99,49 @@ test("the bot-wall page offers the downloads only when it has to", () => {
   assert.doesNotMatch(withLive, /Download for Mac/);
 });
 
+test("the Mac launcher prints the bundle version and exposes a preserving update command", () => {
+  const { execFileSync } = require("child_process");
+  const mac = path.join(ROOT, "Open Prism.command");
+  const expectedVersion = require(path.join(ROOT, "package.json")).version;
+
+  const output = execFileSync("bash", [mac, "--version"], { encoding: "utf8" });
+  assert.equal(output.trim(), `Prism v${expectedVersion}`);
+
+  const script = read("Open Prism.command");
+  assert.match(script, /--update/);
+  assert.match(script, /PRISM_INSTALL_DIR="\$BUNDLE_DIR" bash/);
+  assert.match(script, /Your Node runtime and browser profile will be kept/);
+  assert.match(script, /Close the running Prism window first/);
+  assert.ok(read("scripts", "package.sh").includes('"$HOME/Prism/Open Prism.command" --version'));
+  assert.ok(read("scripts", "package.sh").includes('"$HOME/Prism/Open Prism.command" --update'));
+});
+
+test("the Mac updater passes its own install folder to the existing installer", () => {
+  const { execFileSync } = require("child_process");
+  const os = require("os");
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), "prism-update-test-"));
+  const fakeBin = path.join(temp, "bin");
+  fs.mkdirSync(fakeBin);
+  const fakeCurl = path.join(fakeBin, "curl");
+  const fakeCurlScript = `#!/bin/bash
+if [[ "$*" == *"/healthz"* ]]; then exit 7; fi
+cat <<'SCRIPT'
+printf 'SIMULATED_UPDATE_DIR=%s\\n' "$PRISM_INSTALL_DIR"
+SCRIPT
+`;
+  fs.writeFileSync(fakeCurl, fakeCurlScript, { mode: 0o755 });
+
+  try {
+    const output = execFileSync("bash", [path.join(ROOT, "Open Prism.command"), "--update"], {
+      encoding: "utf8",
+      env: { ...process.env, PATH: `${fakeBin}:${process.env.PATH}` },
+    });
+    assert.ok(output.includes(`SIMULATED_UPDATE_DIR=${ROOT}`));
+  } finally {
+    fs.rmSync(temp, { recursive: true, force: true });
+  }
+});
+
 test("a launcher exists for each platform", () => {
   const mac = path.join(ROOT, "Open Prism.command");
   const win = path.join(ROOT, "Open Prism.bat");
@@ -124,6 +170,8 @@ test("a launcher exists for each platform", () => {
   assert.match(macScript, /admin/i);
 
   const winScript = fs.readFileSync(win, "utf8");
+  assert.match(winScript, /--version/);
+  assert.match(winScript, /PRISM_VERSION/);
   assert.match(winScript, /runtime\\node\.exe/);
   assert.match(winScript, /node_modules\\express/);
   assert.match(winScript, /PRISM_OPEN=1/);
@@ -288,6 +336,8 @@ test("a default build ships no runtime and fits the hosted response budget", () 
   assert.ok(readme.indexOf(command) < readme.indexOf("Prism unpacks its own copy"), "before the Node note");
   assert.match(readme, /Terminal/);
   assert.match(readme, /right-click -> Open/, "the zip path stays documented too");
+  assert.ok(readme.includes('"$HOME/Prism/Open Prism.command" --version'));
+  assert.ok(readme.includes('"$HOME/Prism/Open Prism.command" --update'));
   assert.doesNotMatch(readme, /\bsudo\b/);
 
   fs.rmSync(out, { recursive: true, force: true });

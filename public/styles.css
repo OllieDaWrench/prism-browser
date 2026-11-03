@@ -714,6 +714,16 @@ body.modal-open {
   line-height: 1.6;
 }
 
+#terminal-commands {
+  margin-top: 8px;
+  max-width: min(760px, 94vw);
+}
+
+#terminal-commands code {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 #ver {
   position: fixed;
   right: 10px;
