@@ -11,6 +11,8 @@
     }
   },
   "rewrites": [
+    { "source": "/", "destination": "/api/auth/home" },
+    { "source": "/index.html", "destination": "/api/auth/home" },
     { "source": "/api/:path*", "destination": "/api/:path*" },
     { "source": "/admin", "destination": "/admin.html" },
     { "source": "/login", "destination": "/gate.html" },

@@ -12,6 +12,8 @@ const assert = require("node:assert");
 const fs = require("fs");
 const path = require("path");
 const handler = require("../api/proxy");
+const home = require("../api/auth/home");
+const auth = require("../lib/auth");
 const { rebuildUrl } = handler;
 const { PROXY_MARKER_HEADER } = require("../lib/proxy");
 
@@ -21,9 +23,16 @@ test("vercel.json routes every shape of request at the proxy", () => {
   const config = JSON.parse(fs.readFileSync(path.join(ROOT, "vercel.json"), "utf8"));
   const sources = config.rewrites.map((r) => r.source);
 
+  // Root must be explicitly routed before Vercel serves public/index.html;
+  // otherwise the static app bypasses the login gate.
+  assert.equal(sources[0], "/");
+  assert.equal(config.rewrites[0].destination, "/api/auth/home");
+  assert.equal(sources[1], "/index.html");
+  assert.equal(config.rewrites[1].destination, "/api/auth/home");
+
   // api routes must short-circuit before the catch-all, or they would loop
-  assert.equal(sources[0], "/api/:path*");
-  assert.equal(config.rewrites[0].destination, "/api/:path*");
+  assert.equal(sources[2], "/api/:path*");
+  assert.equal(config.rewrites[2].destination, "/api/:path*");
 
   for (const source of ["/https/:path*", "/http/:path*", "/p/:path*", "/r/:path*"]) {
     assert.ok(sources.includes(source), `missing rewrite for ${source}`);
@@ -109,6 +118,48 @@ function fakeReq(url, headers = {}) {
     [Symbol.asyncIterator]: async function* () {},
   };
 }
+
+test("Vercel root serves login to anonymous visitors and the app to a signed-in visitor", (t) => {
+  const oldSecret = process.env.PRISM_AUTH_SECRET;
+  const oldAuth = process.env.PRISM_AUTH;
+  process.env.PRISM_AUTH_SECRET = "a-test-secret-long-enough";
+  delete process.env.PRISM_AUTH;
+  t.after(() => {
+    if (oldSecret === undefined) delete process.env.PRISM_AUTH_SECRET;
+    else process.env.PRISM_AUTH_SECRET = oldSecret;
+    if (oldAuth === undefined) delete process.env.PRISM_AUTH;
+    else process.env.PRISM_AUTH = oldAuth;
+  });
+
+  const anonymous = fakeRes();
+  home(fakeReq("/"), anonymous);
+  assert.equal(anonymous.statusCode, 200);
+  assert.match(anonymous.body, /Under construction/);
+  assert.match(anonymous.body, /Six-digit number/);
+  assert.doesNotMatch(anonymous.body, /Browse through Prism/);
+
+  const session = auth.createSession({ number: "482913", role: "user" });
+  const signedIn = fakeRes();
+  home(fakeReq("/", { cookie: `prism_session=${session}` }), signedIn);
+  assert.equal(signedIn.statusCode, 200);
+  assert.match(signedIn.body, /Browse through Prism/);
+  assert.doesNotMatch(signedIn.body, /Under construction/);
+});
+
+test("an ungated local copy still serves the app from root", (t) => {
+  const oldSecret = process.env.PRISM_AUTH_SECRET;
+  const oldAuth = process.env.PRISM_AUTH;
+  delete process.env.PRISM_AUTH_SECRET;
+  delete process.env.PRISM_AUTH;
+  t.after(() => {
+    if (oldSecret !== undefined) process.env.PRISM_AUTH_SECRET = oldSecret;
+    if (oldAuth !== undefined) process.env.PRISM_AUTH = oldAuth;
+  });
+
+  const res = fakeRes();
+  home(fakeReq("/"), res);
+  assert.match(res.body, /Browse through Prism/);
+});
 
 test("a request with no target answers with Prism's own page, not a bare 404", async (t) => {
   const realFetch = global.fetch;
