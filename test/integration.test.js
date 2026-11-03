@@ -273,3 +273,41 @@ test("unknown addresses get a Prism error page, not an express stack trace", asy
   assert.match(html, /Prism proxy/);
   assert.doesNotMatch(html, /Cannot GET/);
 });
+
+test("healthz identifies Prism so the launchers can find it on any port", async () => {
+  const res = await fetch(prism + "/healthz");
+  const json = await res.json();
+  assert.equal(json.ok, true);
+  assert.equal(json.prism, true);
+  assert.match(json.version, /^\d+\.\d+\.\d+$/);
+});
+
+test("download links are same-origin and stream a file", async () => {
+  // Put a bundle where scripts/package.sh would leave one, so this stays a real
+  // end-to-end check without depending on the network.
+  const fs = require("fs");
+  const path = require("path");
+  const { LOCAL_DIR } = require("../lib/downloads");
+  const madeDir = !fs.existsSync(LOCAL_DIR);
+  fs.mkdirSync(LOCAL_DIR, { recursive: true });
+  const bundle = path.join(LOCAL_DIR, "Prism-macOS.zip");
+  fs.writeFileSync(bundle, Buffer.concat([Buffer.from("PK\x03\x04", "latin1"), Buffer.alloc(512, 9)]));
+
+  const res = await fetch(prism + "/download/mac");
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get("content-disposition") || "", /attachment; filename="Prism-macOS.zip"/);
+  assert.match(res.headers.get("content-type") || "", /zip/);
+  const body = Buffer.from(await res.arrayBuffer());
+  assert.equal(body.subarray(0, 2).toString("latin1"), "PK");
+  assert.equal(body.length, 516);
+
+  fs.rmSync(bundle, { force: true });
+  if (madeDir) fs.rmSync(LOCAL_DIR, { recursive: true, force: true });
+});
+
+test("the served app points download buttons at /download", async () => {
+  const html = await (await fetch(prism + "/")).text();
+  assert.match(html, /href="\/download\/mac"/);
+  assert.match(html, /href="\/download\/windows"/);
+  assert.doesNotMatch(html, /href="https:\/\/github\.com\/[^"]*releases/);
+});

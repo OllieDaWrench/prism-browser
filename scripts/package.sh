@@ -1,25 +1,43 @@
 #!/usr/bin/env bash
 # Build the downloadable desktop bundles attached to a GitHub release.
 #
-#   ./scripts/package.sh [outdir]      (default: dist)
+#   ./scripts/package.sh [--platform macos|windows|source] [--runtime DIR] [--deps] [outdir]
 #
-# Produces, in <outdir>:
-#   Prism-macOS.zip     Prism/ + Open Prism.command (executable bit preserved)
-#   Prism-Windows.zip   Prism/ + Open Prism.bat
+# Produces, in <outdir> (default: dist):
+#   Prism-macOS.zip    Prism/ + Open Prism.command
+#   Prism-Windows.zip  Prism/ + Open Prism.bat
 #
-# Both contain the same application; only the double-click launcher differs.
-# node_modules is deliberately excluded — the launchers run `npm install` on
-# first use, so the bundles stay small and platform independent (express is
-# pure JavaScript).
+# The zip stays small (under a megabyte) on purpose: prism-browser.vercel.app
+# serves it itself, and a Vercel function cannot send a response body bigger
+# than 4.5 MB. On first launch the launcher unpacks a portable Node runtime into
+# ./runtime — a plain download, no installer, so no administrator password.
+#
+# `--deps` vendors node_modules, so the first launch only needs the runtime and
+# not npm. `--runtime DIR` is for offline bundles and testing: it copies an
+# already-downloaded portable runtime in instead.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# Resolve the output directory to an absolute path immediately: the script
-# changes into it to build the zips, and a relative path would then be applied
-# twice ("dist/dist/Prism-macOS.zip") when reporting results.
-mkdir -p "${1:-$ROOT/dist}"
-OUT="$(cd "${1:-$ROOT/dist}" && pwd)"
+PLATFORM=""
+RUNTIME=""
+WITH_DEPS=0
+OUT_ARG=""
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --platform) PLATFORM="${2:?--platform needs a value}"; shift 2 ;;
+    --runtime) RUNTIME="${2:?--runtime needs a directory}"; shift 2 ;;
+    --deps) WITH_DEPS=1; shift ;;
+    -h|--help)
+      sed -n '2,20p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+      exit 0 ;;
+    *) OUT_ARG="$1"; shift ;;
+  esac
+done
+
+mkdir -p "${OUT_ARG:-$ROOT/dist}"
+OUT="$(cd "${OUT_ARG:-$ROOT/dist}" && pwd)"
 STAGE="$OUT/Prism"
 
 INCLUDE=(
@@ -45,44 +63,104 @@ for item in "${INCLUDE[@]}"; do
     cp "$ROOT/$item" "$STAGE/"
   fi
 done
-
-# keep the bundles small: no test fixtures, no build output
 rm -rf "$STAGE/scripts/__pycache__" "$STAGE/dist" "$STAGE/node_modules"
 
+# ---------------------------------------------------------------- runtime
+# Copy a portable Node into the bundle as ./runtime. Layouts supported:
+#   runtime/bin/node      (the macOS/linux tarball layout)
+#   runtime/node[.exe]    (a flat directory, used by the Windows build)
+# The directory may hold one runtime (bin/node, node, node.exe) or several,
+# one per architecture (mac-arm64/bin/node, mac-x64/bin/node) so a single macOS
+# download works on Intel and Apple Silicon alike.
+if [ -n "$RUNTIME" ]; then
+  found=""
+  [ -x "$RUNTIME/bin/node" ] && found="$RUNTIME/bin/node"
+  [ -z "$found" ] && [ -x "$RUNTIME/node" ] && found="$RUNTIME/node"
+  [ -z "$found" ] && [ -x "$RUNTIME/node.exe" ] && found="$RUNTIME/node.exe"
+  if [ -z "$found" ]; then
+    for candidate in "$RUNTIME"/*/bin/node; do
+      [ -x "$candidate" ] && found="$candidate" && break
+    done
+  fi
+  [ -n "$found" ] || {
+    echo "error: --runtime $RUNTIME does not contain a node binary" >&2
+    exit 1
+  }
+  mkdir -p "$STAGE/runtime"
+  cp -R "$RUNTIME"/. "$STAGE/runtime/"
+  rm -rf "$STAGE/runtime/npm" "$STAGE/runtime/npx" "$STAGE/runtime/corepack" 2>/dev/null || true
+fi
+
+# ---------------------------------------------------------------- dependencies
+# Vendored so the first launch needs no npm and no network.
+if [ "$WITH_DEPS" = "1" ]; then
+  ( cd "$ROOT" && npm ci --omit=dev --no-audit --no-fund >/dev/null 2>&1 ) || {
+    echo "error: npm ci failed while vendoring dependencies" >&2
+    exit 1
+  }
+  cp -R "$ROOT/node_modules" "$STAGE/node_modules"
+fi
+
+# ---------------------------------------------------------------- launchers
 cp "$ROOT/Open Prism.command" "$STAGE/" && chmod +x "$STAGE/Open Prism.command"
 cp "$ROOT/Open Prism.bat" "$STAGE/"
 
-# A short readme that is the first thing someone double-clicking sees.
 cat > "$STAGE/START HERE.txt" <<'TXT'
 Prism
 =====
 
-1. Install Node.js 22 or newer (one time):  https://nodejs.org
+No installer, no admin rights, nothing installed on this computer.
+
+Prism unpacks its own copy of Node.js (the engine it runs on) into this folder
+the first time you start it. That is an ordinary download, roughly 50 MB, and it
+never asks for an administrator password. Because of it the zip you downloaded
+is small — Prism serves the zip itself rather than sending you to a website.
+
+1. Unzip this folder somewhere you can write to — Desktop or Documents is
+   ideal. (Program Files and /Applications are often read-only for normal
+   users; Prism does not need to be there.)
 
 2. Start Prism:
-   - Windows:  double-click "Open Prism.bat"
-   - macOS:    double-click "Open Prism.command"
-               (first time only: right-click > Open, or in Terminal run
-                chmod +x "Open Prism.command")
+   Windows:  double-click "Open Prism.bat"
+   macOS:    double-click "Open Prism.command"
+             First time only, if macOS refuses to open it:
+             right-click the file -> Open -> Open
+             (that is a normal "downloaded from the internet" prompt, it does
+             not ask for an administrator password)
 
-   Your browser opens at http://localhost:3000 — use Prism there.
+   Prism's own browser window opens at http://localhost:3000.
+   The first start takes a moment while it unpacks its engine.
 
-3. In Prism, leave the engine on "Auto". Pages that need a real browser
-   (ChatGPT, Reddit, Spotify, Twitch, Cloudflare-protected sites) open in
-   Live mode, which drives the Chrome or Edge already installed on this
+3. Use Prism there. Leave the engine on "Auto": pages that need a real
+   browser (ChatGPT, Reddit, Spotify, Twitch, Cloudflare-protected sites)
+   open in Live mode, which drives the Chrome or Edge already on this
    computer. If a site asks you to prove you are human, click the checkbox.
 
-Stopping it: close the launcher window (Windows: close the "Prism server"
-window). Nothing is installed system-wide; delete the folder to remove it.
+Stopping it: close the launcher window (Windows: the "Prism server" window).
+Removing it: delete this folder. Nothing was written anywhere else.
 TXT
 
+# ---------------------------------------------------------------- bundles
 cd "$OUT"
-rm -f Prism-macOS.zip Prism-Windows.zip
 
-# macOS bundle: zip keeps the unix mode bits, so the .command stays executable
-zip -q -r -X Prism-macOS.zip Prism -x '*.DS_Store'
-# Windows bundle: same tree, launcher is the .bat; the .command is harmless
-zip -q -r -X Prism-Windows.zip Prism -x '*.DS_Store'
+build() {
+  local asset="$1" need_launcher="$2"
+  [ -e "$STAGE/$need_launcher" ] || { echo "error: missing $need_launcher" >&2; exit 1; }
+  rm -f "$asset"
+  zip -q -r -X "$asset" Prism -x '*.DS_Store' -x '*/__pycache__/*'
+  printf '  %-22s %s\n' "$asset" "$(du -h "$asset" | cut -f1)"
+}
 
 echo "built:"
-ls -lh "$OUT"/Prism-macOS.zip "$OUT"/Prism-Windows.zip | awk '{print "  " $9 "  " $5}'
+case "$PLATFORM" in
+  macos) build Prism-macOS.zip "Open Prism.command" ;;
+  windows) build Prism-Windows.zip "Open Prism.bat" ;;
+  source)
+    rm -f Prism-Source.zip
+    zip -q -r -X Prism-Source.zip Prism -x '*.DS_Store'
+    printf '  %-22s %s\n' "Prism-Source.zip" "$(du -h Prism-Source.zip | cut -f1)" ;;
+  *)
+    [ -n "$PLATFORM" ] && { echo "error: unknown --platform $PLATFORM" >&2; exit 1; }
+    build Prism-macOS.zip "Open Prism.command"
+    build Prism-Windows.zip "Open Prism.bat" ;;
+esac

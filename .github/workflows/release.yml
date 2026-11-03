@@ -1,9 +1,17 @@
 name: Release desktop bundles
 
-# Pushing a tag such as v2.3.0 builds Prism-macOS.zip and Prism-Windows.zip and
-# attaches them to the release. The download links in the app point at
-# /releases/latest/download/<asset>, so the asset names matter:
-# see lib/desktop.js and test/desktop.test.js.
+# Pushing a tag such as v2.4.0 builds the bundles and attaches them to the release:
+#
+#   Prism-macOS.zip    app + Open Prism.command + deps   (small; fetches Node on first run)
+#   Prism-Windows.zip  app + Open Prism.bat     + deps
+#
+# The download links in the app are same-origin (/download/mac, /download/windows)
+# and stream these assets through Prism itself, so the asset names matter:
+# see lib/downloads.js and test/downloads.test.js.
+#
+# The zips stay under Vercel's 4.5 MB function response cap on purpose — the
+# launchers unpack a portable Node runtime on first launch instead. The size
+# check below is what keeps that promise honest.
 
 on:
   push:
@@ -13,6 +21,11 @@ on:
 
 permissions:
   contents: write
+
+env:
+  NODE_VERSION: "22.20.0"
+  # Vercel refuses to send a Function response body larger than 4.5 MB.
+  MAX_BUNDLE_BYTES: "4500000"
 
 jobs:
   package:
@@ -24,53 +37,151 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Build bundles
-        run: ./scripts/package.sh dist
+      - name: Fetch a portable Node runtime for the offline smoke test
+        run: |
+          set -euo pipefail
+          mkdir -p build/runtimes/mac
+          base="https://nodejs.org/dist/v${NODE_VERSION}"
+          # Only the x64 archive is needed: the test machine is Linux, and this
+          # unpacked runtime stands in for what a user's launcher prepares.
+          curl -fsSL --retry 3 -o /tmp/node-mac.tar.gz \
+            "$base/node-v${NODE_VERSION}-darwin-x64.tar.gz"
+          mkdir -p build/runtimes/mac/mac-x64
+          tar -xzf /tmp/node-mac.tar.gz -C build/runtimes/mac/mac-x64 --strip-components=1
+          build/runtimes/mac/mac-x64/bin/node -v
 
-      - name: Check the bundles contain what the launchers need
+      - name: Build macOS bundle
+        run: ./scripts/package.sh --platform macos --deps dist/mac
+
+      - name: Build Windows bundle
+        run: ./scripts/package.sh --platform windows --deps dist/win
+
+      - name: Bundles are small enough to be served by the app itself
         run: |
           set -e
-          for asset in Prism-macOS Prism-Windows; do
-            unzip -l "dist/$asset.zip" | grep -q "Prism/server.js"
-            unzip -l "dist/$asset.zip" | grep -q "Prism/package.json"
-            unzip -l "dist/$asset.zip" | grep -q "Prism/lib/live.js"
+          for zip in dist/mac/Prism-macOS.zip dist/win/Prism-Windows.zip; do
+            size=$(stat -c%s "$zip")
+            echo "$zip: $size bytes (limit $MAX_BUNDLE_BYTES)"
+            # Anything bigger would 413 behind prism-browser.vercel.app, which is
+            # exactly the broken download this whole change is fixing.
+            test "$size" -lt "$MAX_BUNDLE_BYTES"
           done
-          unzip -l dist/Prism-macOS.zip | grep -q "Prism/Open Prism.command"
-          unzip -l dist/Prism-Windows.zip | grep -q "Prism/Open Prism.bat"
 
-      - name: Smoke test the packaged app
+      - name: Bundles contain the app, the launchers and the deps
         run: |
           set -e
-          rm -rf /tmp/prism-dist && mkdir -p /tmp/prism-dist
-          unzip -q dist/Prism-Windows.zip -d /tmp/prism-dist
-          cd /tmp/prism-dist/Prism
-          npm install --no-audit --no-fund >/dev/null
-          PRISM_NO_LIVE=1 PORT=3999 node server.js &
-          SERVER_PID=$!
-          for _ in $(seq 1 40); do
-            if curl -fsS -m 1 http://127.0.0.1:3999/healthz >/dev/null 2>&1; then break; fi
-            sleep 0.25
+          cd dist/mac
+          unzip -l Prism-macOS.zip | grep -q "Prism/node_modules/express/index.js"
+          unzip -l Prism-macOS.zip | grep -q "Prism/server.js"
+          unzip -l Prism-macOS.zip | grep -q "Prism/START HERE.txt"
+          unzip -Z Prism-macOS.zip "Prism/Open Prism.command" | grep -q "^-rwx"
+          cd ../win
+          unzip -l Prism-Windows.zip | grep -q "Prism/node_modules/express/index.js"
+          unzip -l Prism-Windows.zip | grep -q "Prism/Open Prism.bat"
+          # no runtime is shipped, so the zip cannot quietly grow again
+          ! unzip -l Prism-Windows.zip | grep -q "Prism/runtime/"
+
+      - name: Launcher fetches its own runtime without admin rights
+        run: |
+          set -e
+          rm -rf /tmp/launcher && mkdir -p /tmp/launcher
+          unzip -q dist/mac/Prism-macOS.zip -d /tmp/launcher
+          cd /tmp/launcher/Prism
+
+          # A stand-in archive shaped like the real portable Node download, so the
+          # test covers the unpack path without a 50 MB fetch.
+          mkdir -p /tmp/fakeruntime/node-v${NODE_VERSION}-darwin-x64/bin
+          cat > /tmp/fakeruntime/node-v${NODE_VERSION}-darwin-x64/bin/node <<'FAKE'
+          #!/bin/sh
+          case "$1" in -v) echo "v22.20.0" ;; -p) echo 22 ;; *) echo fake ;; esac
+          FAKE
+          chmod +x /tmp/fakeruntime/node-v${NODE_VERSION}-darwin-x64/bin/node
+          tar -czf /tmp/fakeruntime.tar.gz -C /tmp/fakeruntime "node-v${NODE_VERSION}-darwin-x64"
+
+          # PRISM_LAUNCHER_CHECK stops just before the server starts.
+          env -i HOME="$HOME" PATH=/usr/bin:/bin \
+            PRISM_NODE_URL="file:///tmp/fakeruntime.tar.gz" \
+            PRISM_LAUNCHER_CHECK=1 \
+            ./Open\ Prism.command
+
+          # unpacked inside the bundle, by the user's own account
+          test -x "/tmp/launcher/Prism/runtime/mac-x64/bin/node"
+          "/tmp/launcher/Prism/runtime/mac-x64/bin/node" -v
+          # and nothing was installed anywhere else
+          test ! -e /usr/local/bin/node || echo "system node already present, untouched"
+
+      - name: Smoke test the packaged app (no npm, no system node)
+        run: |
+          set -e
+          rm -rf /tmp/smoke && mkdir -p /tmp/smoke
+          unzip -q dist/mac/Prism-macOS.zip -d /tmp/smoke
+          cd /tmp/smoke/Prism
+
+          # Stand in for the runtime the launcher would have unpacked.
+          mkdir -p runtime && cp -R "$GITHUB_WORKSPACE/build/runtimes/mac/mac-x64" runtime/mac-x64
+
+          # Let the download endpoint hand out the real bundle from dist/.
+          mkdir -p dist && cp "$GITHUB_WORKSPACE/dist/mac/Prism-macOS.zip" dist/
+
+          # Exactly what a machine without admin rights has: this folder, nothing else.
+          env -i HOME="$HOME" PATH=/usr/bin:/bin PRISM_NO_LIVE=1 PORT=3999 \
+            ./runtime/mac-x64/bin/node server.js &
+          for _ in $(seq 1 60); do
+            curl -fsS -m 1 http://127.0.0.1:3999/healthz >/dev/null 2>&1 && break
+            sleep 0.5
           done
+
+          curl -fsS http://127.0.0.1:3999/healthz | grep -q '"prism":true'
           curl -fsS http://127.0.0.1:3999/ | grep -q 'id="omnibox"'
-          curl -fsS -o /dev/null -w "%{http_code}" http://127.0.0.1:3999/https/!invalid!/ | grep -q 502
-          kill $SERVER_PID
+          curl -fsS http://127.0.0.1:3999/ | grep -q 'href="/download/mac"'
+
+          # /download/mac must save a zip, never navigate anywhere
+          curl -fsS -D /tmp/headers -o /tmp/download.zip http://127.0.0.1:3999/download/mac
+          grep -qi 'content-disposition: attachment; filename="Prism-macOS.zip"' /tmp/headers
+          head -c 2 /tmp/download.zip | od -An -c | tr -d ' ' | grep -q 'PK'
+          pkill -f "server.js" || true
 
       - name: Publish release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -e
+          set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
+          cp dist/mac/Prism-macOS.zip dist/win/Prism-Windows.zip dist/
+          ls -lh dist/*.zip
+
+          # Notes live in a file: a multi-line string inside a YAML block scalar
+          # is easy to break, and this also lets the text use backticks freely.
+          cat > /tmp/notes.md <<'NOTES'
+          Prism runs on your own computer, so it can drive the Chrome, Edge or
+          Chromium already installed there — that is what makes **Live mode**, and
+          any site behind Cloudflare, actually work.
+
+          ## No installer, no administrator rights
+
+          Unzip the download and double-click the launcher. Nothing is installed
+          system-wide, nothing is written outside that folder, and no step asks for
+          an admin password.
+
+          * **macOS** — `Prism-macOS.zip` → double-click `Open Prism.command`
+            (Apple Silicon and Intel both work). First launch after downloading:
+            right-click › Open. That is Gatekeeper, not an admin prompt.
+          * **Windows** — `Prism-Windows.zip` → double-click `Open Prism.bat`.
+            If SmartScreen appears: More info › Run anyway. Also not an admin prompt.
+
+          The first launch unpacks Prism's own copy of Node.js into that same folder
+          (a plain download, about 50 MB, no password). Dependencies are already
+          inside the zip, so there is no `npm install`. Prism then opens at
+          http://localhost:3000. Later launches skip the download.
+
+          Delete the folder to remove Prism.
+          NOTES
+
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/Prism-macOS.zip dist/Prism-Windows.zip --clobber
           else
             gh release create "$TAG" \
               dist/Prism-macOS.zip dist/Prism-Windows.zip \
               --title "Prism $TAG" \
-              --notes "Prism runs as a local app: it drives the Chrome or Edge already installed on your machine, which is what makes Live mode (and Cloudflare-protected sites) work.
-
-          **Windows** — unzip, then double-click \`Open Prism.bat\`.
-          **macOS** — unzip, then double-click \`Open Prism.command\` (first time: right-click › Open, or \`chmod +x\`).
-
-          Both need Node.js 22+ installed once from https://nodejs.org. Your browser opens at http://localhost:3000."
+              --notes-file /tmp/notes.md
           fi

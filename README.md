@@ -17,35 +17,66 @@ real browser, and if a proxied page fails you get a one-click offer to reopen it
 
 ## Download and run it
 
-Grab the bundle for your computer — both contain the same app, plus a launcher:
+| Platform | Download |
+| --- | --- |
+| macOS (Apple Silicon + Intel) | [Prism-macOS.zip](https://github.com/OllieDaWrench/prism-browser/releases/latest/download/Prism-macOS.zip) |
+| Windows (x64) | [Prism-Windows.zip](https://github.com/OllieDaWrench/prism-browser/releases/latest/download/Prism-Windows.zip) |
 
-| Platform | Download | Start it by |
-| --- | --- | --- |
-| macOS | [Prism-macOS.zip](https://github.com/OllieDaWrench/prism-browser/releases/latest/download/Prism-macOS.zip) | double-click `Open Prism.command` |
-| Windows | [Prism-Windows.zip](https://github.com/OllieDaWrench/prism-browser/releases/latest/download/Prism-Windows.zip) | double-click `Open Prism.bat` |
-| Any (from source) | `git clone` or the repository zip | `npm start` |
+In the app those buttons are same-origin — `/download/mac` and `/download/windows` — and Prism
+streams the zip itself with `Content-Disposition: attachment`. Clicking downloads the file; nothing
+navigates to GitHub, no new tab, no "release page". (The GitHub links above are the fallback, and
+they are what the hosted copy proxies from.)
 
-Both need **Node.js 22+** installed once from [nodejs.org](https://nodejs.org/en/download). The launcher
-installs Prism's single dependency on first run and opens `http://localhost:3000`.
+**No installer, no admin rights, nothing installed system-wide.**
 
-macOS note: the first launch may be blocked by Gatekeeper — right-click `Open Prism.command` › **Open**,
-or run `chmod +x "Open Prism.command"` once.
+1. Unzip into a folder you can write to — Desktop or Documents is ideal. `Program Files` and
+   `/Applications` are often read-only for normal users, and Prism does not need to live there.
+2. Start it:
+   - **Windows:** double-click `Open Prism.bat` (if SmartScreen appears: *More info › Run anyway*).
+   - **macOS:** double-click `Open Prism.command` (first launch after downloading: right-click › *Open*).
+     Both of those are "downloaded from the internet" prompts, not administrator prompts.
+3. Prism opens at `http://localhost:3000`.
 
-From a checkout:
+The first launch unpacks a portable Node runtime into `runtime/` **inside that folder** — a plain
+download, no installer, no password. Dependencies are already vendored in `node_modules`, so there
+is no `npm install`. Later launches skip straight to starting the app. Delete the folder (including
+`runtime/`) to remove Prism.
+
+### Why the zip does not carry the runtime
+
+The zips are under 1 MB on purpose. `prism-browser.vercel.app` serves them itself, and Vercel
+Functions cannot send a response body larger than 4.5 MB — a bundle with an embedded runtime is
+~45 MB and would fail on exactly the download button this is meant to fix. `lib/downloads.js`
+refuses to hand over anything over 4.4 MB rather than send a truncated file, and the release
+workflow asserts the size before publishing.
+
+### Building the bundles
+
+```bash
+./scripts/package.sh --platform macos --deps dist/mac       # Prism-macOS.zip
+./scripts/package.sh --platform windows --deps dist/win     # Prism-Windows.zip
+# already have a portable runtime to bake in (offline bundle)?
+./scripts/package.sh --platform macos --runtime path/to/runtimes --deps
+```
+
+`.github/workflows/release.yml` runs on every `v*` tag: it builds both zips, checks they are under
+the response cap, boots the packaged app with *only* a portable runtime (no npm, no system Node),
+checks `/download/mac` returns an attachment whose bytes start with `PK`, and verifies the launcher
+unpacks its runtime with an ordinary download.
+
+From a checkout (needs Node 22+, no admin needed):
 
 ```bash
 npm install     # express, nothing else
 npm start       # http://localhost:3000
 ```
 
-The bundles are built by `.github/workflows/release.yml` from `scripts/package.sh` on every `v*` tag, so
-those links always point at the newest release.
-
 ### Why downloads at all?
 
 Prism has to run on the machine whose browser it drives. The hosted copy can proxy pages, but it cannot
 start Chromium, which is why Live mode — and anything behind Cloudflare — only works in the local app.
-Every place in the UI that says "run Prism locally" links to these downloads.
+Every place in the UI that says "run Prism locally" links to these downloads, which Prism streams
+itself so the button works even on networks that block GitHub.
 
 Requirements: Node 22+ (for the built-in `fetch`/`WebSocket` the live engine speaks CDP with).
 Live mode also needs a Chromium-based browser installed. Prism reuses the Chrome or Edge you already
