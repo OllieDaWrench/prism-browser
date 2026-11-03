@@ -14,7 +14,12 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-OUT="${1:-$ROOT/dist}"
+
+# Resolve the output directory to an absolute path immediately: the script
+# changes into it to build the zips, and a relative path would then be applied
+# twice ("dist/dist/Prism-macOS.zip") when reporting results.
+mkdir -p "${1:-$ROOT/dist}"
+OUT="$(cd "${1:-$ROOT/dist}" && pwd)"
 STAGE="$OUT/Prism"
 
 INCLUDE=(

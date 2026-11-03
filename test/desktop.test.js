@@ -127,3 +127,39 @@ test("the release workflow publishes on tags and checks the bundles", () => {
   assert.match(workflow, /server\.js/);
   assert.match(workflow, /gh release create/);
 });
+
+test("the packaging script works with a relative output directory", () => {
+  // Regression: the script `cd`s into the output directory, so a relative path
+  // (which is what the release workflow passes) was applied twice and the
+  // step exited non-zero after building both zips.
+  const { execFileSync } = require("child_process");
+  const os = require("os");
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), "prism-pack-"));
+  const rel = path.join(out, "out");
+
+  execFileSync("bash", [path.join(ROOT, "scripts", "package.sh"), path.basename(rel)], {
+    cwd: out,
+    stdio: "pipe",
+  });
+
+  for (const asset of [DOWNLOADS.mac.file, DOWNLOADS.windows.file]) {
+    const zip = path.join(rel, asset);
+    assert.ok(fs.existsSync(zip), `${asset} was not produced`);
+    assert.ok(fs.statSync(zip).size > 20000, `${asset} looks empty`);
+  }
+
+  // both launchers travel inside the bundle
+  const listing = execFileSync("unzip", ["-l", path.join(rel, DOWNLOADS.mac.file)], { encoding: "utf8" });
+  assert.match(listing, /Prism\/Open Prism\.command/);
+  assert.match(listing, /Prism\/Open Prism\.bat/);
+  assert.match(listing, /Prism\/START HERE\.txt/);
+  assert.match(listing, /Prism\/lib\/live\.js/);
+
+  // and the macOS launcher keeps its executable bit inside the zip
+  const modes = execFileSync("unzip", ["-Z", path.join(rel, DOWNLOADS.mac.file), "Prism/Open Prism.command"], {
+    encoding: "utf8",
+  });
+  assert.match(modes, /-rwx/);
+
+  fs.rmSync(out, { recursive: true, force: true });
+});
