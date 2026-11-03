@@ -227,6 +227,22 @@ button {
   font-size: 12px;
 }
 
+.banner-link {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #101218;
+  border: 1px solid #3d4658;
+  color: #cfe1ff;
+  font-size: 12px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.banner-link:hover {
+  border-color: #55617a;
+  color: #fff;
+}
+
 #banner-close.ghost {
   color: var(--muted);
   font-size: 13px;
@@ -330,6 +346,72 @@ main {
   background: var(--gold);
   color: #1a1408;
   font-weight: 700;
+}
+
+/* download buttons: the one thing a hosted copy can offer */
+.downloads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 18px 0 12px;
+}
+
+.download {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 16px;
+  border-radius: 12px;
+  background: var(--gold);
+  color: #1a1408;
+  font-weight: 700;
+  font-size: 14px;
+  text-decoration: none;
+  border: 1px solid transparent;
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+
+.download:hover {
+  background: #f0c96a;
+  transform: translateY(-1px);
+}
+
+.download svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.requires {
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  color: #7d8798;
+  line-height: 1.6;
+}
+
+.requires a {
+  color: var(--gold);
+}
+
+.requires code {
+  background: #0d1016;
+  border: 1px solid #232a36;
+  border-radius: 5px;
+  padding: 1px 5px;
+  font-size: 12px;
+  color: #cfd6e4;
+}
+
+.ghost-button {
+  background: transparent !important;
+  color: var(--muted) !important;
+  border: 1px solid var(--line);
+  font-weight: 500 !important;
+  font-size: 13px;
 }
 
 /* ---------- start screen ---------- */

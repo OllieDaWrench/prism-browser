@@ -82,16 +82,31 @@
           />
           <div id="live-overlay" hidden>
             <div class="live-card">
-              <h2>Live mode unavailable</h2>
+              <h2>Get Prism on this computer</h2>
               <p id="live-reason"></p>
               <p class="hint" id="live-hint"></p>
-              <button type="button" id="live-fallback">Use proxy mode instead</button>
+              <div class="downloads">
+                <a class="download" id="dl-mac" href="https://github.com/OllieDaWrench/prism-browser/releases/latest/download/Prism-macOS.zip" target="_blank" rel="noreferrer noopener">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11" /><path d="m7.5 10.5 4.5 4.5 4.5-4.5" /><path d="M4 20h16" /></svg>
+                  Download for Mac
+                </a>
+                <a class="download" id="dl-windows" href="https://github.com/OllieDaWrench/prism-browser/releases/latest/download/Prism-Windows.zip" target="_blank" rel="noreferrer noopener">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11" /><path d="m7.5 10.5 4.5 4.5 4.5-4.5" /><path d="M4 20h16" /></svg>
+                  Download for Windows
+                </a>
+              </div>
+              <p class="requires">
+                Needs Node.js 22+ (one time, from
+                <a href="https://nodejs.org/en/download" target="_blank" rel="noreferrer noopener">nodejs.org</a>). Unzip, then
+                double-click <code>Open Prism.command</code> on Mac or <code>Open Prism.bat</code> on Windows.
+              </p>
+              <button type="button" id="live-fallback" class="ghost-button">Stay in proxy mode</button>
             </div>
           </div>
         </div>
       </main>
     </div>
-    <div id="ver">2.2.0</div>
+    <div id="ver">2.3.0</div>
     <script src="/app.js"></script>
   </body>
 </html>

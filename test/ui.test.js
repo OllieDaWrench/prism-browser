@@ -284,7 +284,8 @@ test("hosted deploy with dead path rewrites falls back to the rewrite-free endpo
     `${ORIGIN}/api/proxy?url=${encodeURIComponent("https://example.com/")}`
   );
   assert.match(window.document.getElementById("engine-note").textContent, /Hosted copy/);
-  assert.equal(window.document.getElementById("banner").hidden, true);
+  // the banner now carries the "get the local app" link rather than hiding
+  assert.match(window.document.getElementById("banner-text").textContent, /Hosted copy/);
   dom.window.close();
 });
 
@@ -375,15 +376,19 @@ test("without Live mode a Cloudflare block explains how to get through", async (
 
   assert.match(
     window.document.getElementById("banner-text").textContent,
-    /Cloudflare blocks the proxy engine/
+    /Cloudflare blocks the hosted proxy|Cloudflare blocks the proxy engine/
   );
   assert.equal(window.document.getElementById("banner-action").textContent, "How?");
 
-  // the explanation tells them to run it locally
+  // the explanation points at the download instead of at a terminal command
   window.document.getElementById("banner-action").click();
   await tick();
   assert.equal(window.document.getElementById("live-overlay").hidden, false);
-  assert.match(window.document.getElementById("live-hint").textContent, /npm start/);
+  assert.match(window.document.getElementById("live-reason").textContent, /hosted copy/i);
+  assert.equal(
+    window.document.getElementById("dl-mac").getAttribute("href"),
+    require("../lib/desktop").DOWNLOADS.mac.url
+  );
   dom.window.close();
 });
 
@@ -403,5 +408,69 @@ test("a live-mode challenge points at the checkbox instead of hanging", async ()
 
   assert.match(window.document.getElementById("banner-text").textContent, /checking this browser/);
   assert.match(window.document.getElementById("banner-text").textContent, /click it/);
+  dom.window.close();
+});
+
+test("a hosted copy shows working download links for both platforms", async () => {
+  if (!JSDOM) return;
+  const dom = makeUi(false, { hosted: true });
+  const { window } = dom;
+  await tick(60);
+
+  const { DOWNLOADS } = require("../lib/desktop");
+
+  // the banner offers a way out as soon as the app boots
+  const bannerLink = window.document.querySelector(".banner-link");
+  assert.ok(bannerLink, "expected a download link in the banner");
+  assert.equal(bannerLink.hidden, false);
+  assert.equal(bannerLink.href, DOWNLOADS.mac.url);
+  assert.equal(bannerLink.target, "_blank");
+
+  // and the "live unavailable" card is explicit about both platforms
+  const mac = window.document.getElementById("dl-mac");
+  const win = window.document.getElementById("dl-windows");
+  assert.equal(mac.getAttribute("href"), DOWNLOADS.mac.url);
+  assert.equal(win.getAttribute("href"), DOWNLOADS.windows.url);
+  assert.match(mac.textContent, /Download for Mac/);
+  assert.match(win.textContent, /Download for Windows/);
+
+  // and the card explains why the hosted copy cannot do it itself
+  window.postMessage({ type: "prism-blocked", vendor: "Cloudflare", url: "https://reddit.com/" }, "*");
+  await tick();
+  window.document.getElementById("banner-action").click();
+  await tick();
+  assert.equal(window.document.getElementById("live-overlay").hidden, false);
+  assert.match(window.document.getElementById("live-reason").textContent, /hosted copy/i);
+  assert.match(window.document.getElementById("live-hint").textContent, /Chrome|Edge|browser/i);
+  dom.window.close();
+});
+
+test("the bot wall on a hosted copy points at the downloads", async () => {
+  if (!JSDOM) return;
+  const dom = makeUi(false, { hosted: true });
+  const { window } = dom;
+  await tick(60);
+
+  window.postMessage(
+    { type: "prism-blocked", vendor: "Cloudflare", url: "https://www.reddit.com/" },
+    "*"
+  );
+  await tick();
+
+  const bannerLink = window.document.querySelector(".banner-link");
+  assert.ok(bannerLink && !bannerLink.hidden, "expected a download link next to the wall explanation");
+  assert.equal(bannerLink.href, require("../lib/desktop").DOWNLOADS.mac.url);
+  assert.match(window.document.getElementById("banner-text").textContent, /blocks the hosted proxy|blocks the proxy engine/);
+  dom.window.close();
+});
+
+test("a local install is not nagged with download links", async () => {
+  if (!JSDOM) return;
+  const dom = makeUi(false, { hosted: false });
+  const { window } = dom;
+  await tick(60);
+
+  const bannerLink = window.document.querySelector(".banner-link");
+  assert.ok(!bannerLink || bannerLink.hidden, "a local install should not be told to download Prism");
   dom.window.close();
 });

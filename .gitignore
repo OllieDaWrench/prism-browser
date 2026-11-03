@@ -1,0 +1,6 @@
+# packaging output (scripts/package.sh)
+dist/
+
+# local noise
+.DS_Store
+*.log

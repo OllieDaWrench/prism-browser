@@ -1,0 +1,76 @@
+name: Release desktop bundles
+
+# Pushing a tag such as v2.3.0 builds Prism-macOS.zip and Prism-Windows.zip and
+# attaches them to the release. The download links in the app point at
+# /releases/latest/download/<asset>, so the asset names matter:
+# see lib/desktop.js and test/desktop.test.js.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Build bundles
+        run: ./scripts/package.sh dist
+
+      - name: Check the bundles contain what the launchers need
+        run: |
+          set -e
+          for asset in Prism-macOS Prism-Windows; do
+            unzip -l "dist/$asset.zip" | grep -q "Prism/server.js"
+            unzip -l "dist/$asset.zip" | grep -q "Prism/package.json"
+            unzip -l "dist/$asset.zip" | grep -q "Prism/lib/live.js"
+          done
+          unzip -l dist/Prism-macOS.zip | grep -q "Prism/Open Prism.command"
+          unzip -l dist/Prism-Windows.zip | grep -q "Prism/Open Prism.bat"
+
+      - name: Smoke test the packaged app
+        run: |
+          set -e
+          rm -rf /tmp/prism-dist && mkdir -p /tmp/prism-dist
+          unzip -q dist/Prism-Windows.zip -d /tmp/prism-dist
+          cd /tmp/prism-dist/Prism
+          npm install --no-audit --no-fund >/dev/null
+          PRISM_NO_LIVE=1 PORT=3999 node server.js &
+          SERVER_PID=$!
+          for _ in $(seq 1 40); do
+            if curl -fsS -m 1 http://127.0.0.1:3999/healthz >/dev/null 2>&1; then break; fi
+            sleep 0.25
+          done
+          curl -fsS http://127.0.0.1:3999/ | grep -q 'id="omnibox"'
+          curl -fsS -o /dev/null -w "%{http_code}" http://127.0.0.1:3999/https/!invalid!/ | grep -q 502
+          kill $SERVER_PID
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          TAG="${GITHUB_REF_NAME}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/Prism-macOS.zip dist/Prism-Windows.zip --clobber
+          else
+            gh release create "$TAG" \
+              dist/Prism-macOS.zip dist/Prism-Windows.zip \
+              --title "Prism $TAG" \
+              --notes "Prism runs as a local app: it drives the Chrome or Edge already installed on your machine, which is what makes Live mode (and Cloudflare-protected sites) work.
+
+          **Windows** — unzip, then double-click \`Open Prism.bat\`.
+          **macOS** — unzip, then double-click \`Open Prism.command\` (first time: right-click › Open, or \`chmod +x\`).
+
+          Both need Node.js 22+ installed once from https://nodejs.org. Your browser opens at http://localhost:3000."
+          fi
