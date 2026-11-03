@@ -23,16 +23,23 @@ test("vercel.json routes every shape of request at the proxy", () => {
   const config = JSON.parse(fs.readFileSync(path.join(ROOT, "vercel.json"), "utf8"));
   const sources = config.rewrites.map((r) => r.source);
 
-  // Root must be explicitly routed before Vercel serves public/index.html;
-  // otherwise the static app bypasses the login gate.
-  assert.equal(sources[0], "/");
+  // The app shell lives outside public/ and can only be fetched through the
+  // gate; public/index.html is the static sign-in page.
+  assert.equal(sources[0], "/app");
   assert.equal(config.rewrites[0].destination, "/api/auth/home");
-  assert.equal(sources[1], "/index.html");
-  assert.equal(config.rewrites[1].destination, "/api/auth/home");
+  const publicHome = fs.readFileSync(path.join(ROOT, "public", "index.html"), "utf8");
+  const signInPage = fs.readFileSync(path.join(ROOT, "public", "gate.html"), "utf8");
+  const privateApp = fs.readFileSync(path.join(ROOT, "private", "app.html"), "utf8");
+  assert.equal(publicHome, signInPage, "the static homepage stays in sync with /login");
+  assert.match(publicHome, /Six-digit number/);
+  assert.doesNotMatch(publicHome, /Browse through Prism/);
+  assert.match(privateApp, /Browse through Prism/);
+  assert.equal(fs.existsSync(path.join(ROOT, "public", "app.html")), false, "the app shell is not a public static file");
 
   // api routes must short-circuit before the catch-all, or they would loop
-  assert.equal(sources[2], "/api/:path*");
-  assert.equal(config.rewrites[2].destination, "/api/:path*");
+  assert.equal(sources[1], "/api/:path*");
+  assert.equal(config.rewrites[1].destination, "/api/:path*");
+  assert.match(config.functions["api/auth/home.js"].includeFiles, /private\/app\.html/);
 
   for (const source of ["/https/:path*", "/http/:path*", "/p/:path*", "/r/:path*"]) {
     assert.ok(sources.includes(source), `missing rewrite for ${source}`);
@@ -119,7 +126,7 @@ function fakeReq(url, headers = {}) {
   };
 }
 
-test("Vercel root serves login to anonymous visitors and the app to a signed-in visitor", (t) => {
+test("the private app route serves login to anonymous visitors and the app to a signed-in visitor", (t) => {
   const oldSecret = process.env.PRISM_AUTH_SECRET;
   const oldAuth = process.env.PRISM_AUTH;
   process.env.PRISM_AUTH_SECRET = "a-test-secret-long-enough";

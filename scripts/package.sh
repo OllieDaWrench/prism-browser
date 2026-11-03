@@ -49,6 +49,7 @@ INCLUDE=(
   api
   lib
   public
+  private
   scripts
 )
 

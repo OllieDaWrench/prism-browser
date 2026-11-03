@@ -25,6 +25,7 @@ module.exports = async function handler(req, res) {
       admin: session ? session.role === "admin" : false,
       needsSetup,
       configured: Boolean(auth.secret()),
+      required: gate.enabled(),
       storage: users.storageMode(),
       canWrite: users.canWrite(),
     })

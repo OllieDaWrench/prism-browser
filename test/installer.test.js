@@ -22,7 +22,7 @@ const http = require("http");
 const express = require("express");
 const { execFile, execFileSync } = require("child_process");
 
-const { installerScript, FALLBACK_URL } = require("../lib/installer");
+const { installerScript } = require("../lib/installer");
 
 /**
  * Run the installer without blocking the event loop: the fake release server
@@ -88,7 +88,8 @@ test("the script is valid bash and never asks for elevation", () => {
   assert.doesNotMatch(script, /osascript/);
   assert.match(script, /Downloading Prism/);
   assert.match(script, /xattr -dr com\.apple\.quarantine/);
-  assert.match(script, /FALLBACK_URL/, "needs a fallback if the served copy is missing");
+  assert.match(script, /"required":true/, "a required but unconfigured site fails closed");
+  assert.doesNotMatch(script, /github\.com|FALLBACK_URL/i, "downloads never bypass the site gate");
 });
 
 test("it installs into a home directory and leaves a double-clickable launcher", async (t) => {
@@ -192,8 +193,9 @@ test("a non-macOS system gets an explanation instead of a half install", async (
   fs.rmSync(home, { recursive: true, force: true });
 });
 
-test("the fallback is the stable release asset, never a GitHub page", () => {
-  assert.match(FALLBACK_URL, /releases\/latest\/download\/Prism-macOS\.zip$/);
+test("the installer has no public GitHub fallback that can bypass sign-in", () => {
+  const script = installerScript("https://prism-browser.vercel.app");
+  assert.doesNotMatch(script, /github\.com|FALLBACK_URL/i);
 });
 
 test("the installer asks for a six-digit number and password before downloading", () => {
