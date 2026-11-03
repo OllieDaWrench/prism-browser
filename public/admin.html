@@ -148,13 +148,13 @@
 
         function render(users, canWrite, storage, me) {
           document.getElementById("me").textContent = me;
-          if (storage !== "kv" || !canWrite) {
+          if (storage !== "blob" || !canWrite) {
             storageNote.hidden = false;
-            storageNote.textContent = storage === "kv"
-              ? "Accounts are in Upstash, but this copy cannot change them."
+            storageNote.textContent = storage === "blob"
+              ? "Accounts are in private Vercel Blob, but this copy cannot change them."
               : storage === "env"
-                ? "Accounts come from the PRISM_USERS environment variable, which cannot be edited from this page. Connect Upstash to add people here."
-                : "This copy has no permanent storage, so accounts added here would be lost on the next deploy. Connect Upstash to keep them.";
+                ? "Accounts come from the PRISM_USERS environment variable, which cannot be edited from this page. Connect Vercel Blob to add people here."
+                : "This copy has no permanent storage, so accounts added here would be lost on the next deploy. Connect Vercel Blob to keep them.";
           } else {
             storageNote.hidden = true;
           }

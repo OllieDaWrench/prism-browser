@@ -86,7 +86,7 @@ app.post("/api/auth/login", async (req, res) => {
   if (!auth.secret()) return res.status(500).json({ ok: false, error: "Set PRISM_AUTH_SECRET to use sign-in." });
 
   const body = await readBody(req);
-  const result = await users.verifyCredentials(body.number || body.phone, body.password);
+  const result = await users.verifyCredentials(body.number, body.password);
   if (!result.ok) return res.status(401).json({ ok: false, error: result.reason });
 
   // Local http has no TLS, so the cookie cannot be Secure here or it is dropped.
@@ -104,7 +104,7 @@ app.post("/api/auth/token", async (req, res) => {
   if (!auth.secret()) return res.status(500).json({ ok: false, error: "Set PRISM_AUTH_SECRET." });
 
   const body = await readBody(req);
-  const result = await users.verifyCredentials(body.number || body.phone, body.password);
+  const result = await users.verifyCredentials(body.number, body.password);
   if (!result.ok) return res.status(401).json({ ok: false, error: result.reason });
   res.json({ ok: true, token: auth.createInstallToken(result.user) });
 });
@@ -136,7 +136,7 @@ app.post("/api/auth/users", async (req, res) => {
 
   const body = await readBody(req);
   const action = String(body.action || "").toLowerCase();
-  const number = body.number || body.phone;
+  const number = body.number;
 
   try {
     if (action === "add") {

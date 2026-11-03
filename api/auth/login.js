@@ -59,7 +59,7 @@ module.exports = async function handler(req, res) {
   }
 
   const body = await readBody(req);
-  const result = await users.verifyCredentials(body.number || body.phone, body.password);
+  const result = await users.verifyCredentials(body.number, body.password);
   if (!result.ok) {
     noteFailure(ip);
     res.statusCode = 401;

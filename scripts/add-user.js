@@ -7,8 +7,8 @@
  *   node scripts/add-user.js 482913 "a good password" --name Ollie --admin
  *
  * This is how the *first* manager gets made, because the console at /admin needs
- * somebody to sign in as. It writes to whatever store the app reads — Upstash
- * when KV_REST_API_URL/KV_REST_API_TOKEN are set, otherwise data/users.json.
+ * somebody to sign in as. It writes to whatever store the app reads — Vercel
+ * Blob when BLOB_READ_WRITE_TOKEN is set, otherwise data/users.json.
  */
 
 const users = require("../lib/users");
@@ -36,7 +36,7 @@ async function main() {
 
     console.log(`Added ${user.number}${user.role === "admin" ? " (manager)" : ""}.`);
     const mode = users.storageMode();
-    const where = mode === "kv" ? "Upstash" : mode === "env" ? "PRISM_USERS (read-only)" : process.env.PRISM_USERS_FILE || "data/users.json";
+    const where = mode === "blob" ? "private Vercel Blob" : mode === "env" ? "PRISM_USERS (read-only)" : process.env.PRISM_USERS_FILE || "data/users.json";
     console.log(`Stored in: ${where}`);
     if (!auth.secret()) console.log("\nSet PRISM_AUTH_SECRET (16+ characters), or nobody can sign in.");
   } catch (err) {

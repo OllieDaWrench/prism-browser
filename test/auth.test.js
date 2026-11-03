@@ -4,7 +4,7 @@
  * Accounts: a six-digit number, a password, and the session that follows.
  *
  * These drive the real library with a throwaway store per test, so a mistake in
- * hashing, expiry, scoping or the Upstash round trip fails here rather than on
+ * hashing, expiry, scoping or the private Blob round trip fails here rather than on
  * the deployed site.
  */
 
@@ -26,10 +26,8 @@ function sandbox(t) {
   process.env.PRISM_AUTH_SECRET = SECRET;
   delete process.env.PRISM_USERS;
   delete process.env.PRISM_AUTH;
-  delete process.env.KV_REST_API_URL;
-  delete process.env.KV_REST_API_TOKEN;
-  delete process.env.UPSTASH_REDIS_REST_URL;
-  delete process.env.UPSTASH_REDIS_REST_TOKEN;
+  delete process.env.BLOB_READ_WRITE_TOKEN;
+  users._setBlobSdkForTests(null);
   delete process.env.VERCEL;
   t.after(() => {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -53,10 +51,10 @@ test("the sign-in name is six digits, however it is typed", () => {
   assert.equal(auth.normaliseNumber(" 482 913 "), "482913");
   assert.equal(auth.normaliseNumber("482-913"), "482913");
 
-  // not a phone number any more, and not free text
   assert.equal(auth.normaliseNumber("0482913"), null, "seven digits");
   assert.equal(auth.normaliseNumber("48291"), null, "five digits");
   assert.equal(auth.normaliseNumber("48291a"), null);
+  assert.equal(auth.normaliseNumber("48a2913"), null, "letters cannot be stripped into a valid number");
   assert.equal(auth.normaliseNumber(""), null);
   assert.equal(auth.normaliseNumber(null), null);
 });
@@ -230,91 +228,91 @@ test("needsSetup is true only while there are no accounts", async (t) => {
 });
 
 /* ------------------------------------------------------------------ *
- * Upstash
+ * Vercel Blob
  * ------------------------------------------------------------------ */
 
-/** A stand-in for the Upstash REST API: one key, commands as a JSON array. */
-function fakeUpstash(t, initial) {
+/** A tiny private-Blob stand-in; no Vercel account or network is needed. */
+function fakeBlob(t, initial) {
   const store = new Map();
-  if (initial !== undefined) store.set(users.KV_KEY, initial);
+  if (initial !== undefined) store.set(users.BLOB_PATH, initial);
   const calls = [];
-
-  const original = global.fetch;
-  global.fetch = async (url, options) => {
-    const command = JSON.parse(options.body);
-    calls.push({ url, command });
-    if (options.headers.Authorization !== "Bearer good-token") {
-      return { ok: false, status: 401, json: async () => ({ error: "unauthorised" }) };
-    }
-    const [verb] = command;
-    if (verb === "GET") return { ok: true, status: 200, json: async () => ({ result: store.get(command[1]) || null }) };
-    if (verb === "SET") {
-      store.set(command[1], command[2]);
-      return { ok: true, status: 200, json: async () => ({ result: "OK" }) };
-    }
-    return { ok: true, status: 200, json: async () => ({ result: null }) };
+  const api = {
+    async get(pathname, options) {
+      calls.push({ method: "get", pathname, options });
+      if (options.access !== "private" || options.token !== "blob-test-token") throw new Error("bad private read config");
+      if (!store.has(pathname)) return null;
+      const text = store.get(pathname);
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(text));
+          controller.close();
+        },
+      });
+      return { stream };
+    },
+    async put(pathname, body, options) {
+      calls.push({ method: "put", pathname, options });
+      if (options.access !== "private" || options.token !== "blob-test-token") throw new Error("bad private write config");
+      store.set(pathname, String(body));
+      return { pathname };
+    },
   };
-
-  process.env.KV_REST_API_URL = "https://fake-upstash.example";
-  process.env.KV_REST_API_TOKEN = "good-token";
-
+  users._setBlobSdkForTests(api);
+  process.env.BLOB_READ_WRITE_TOKEN = "blob-test-token";
   t.after(() => {
-    global.fetch = original;
-    delete process.env.KV_REST_API_URL;
-    delete process.env.KV_REST_API_TOKEN;
+    users._setBlobSdkForTests(null);
+    delete process.env.BLOB_READ_WRITE_TOKEN;
   });
   return { store, calls };
 }
 
-test("accounts are kept in Upstash when it is configured", async (t) => {
+test("accounts are kept in private Vercel Blob when configured", async (t) => {
   sandbox(t);
-  const { store, calls } = fakeUpstash(t);
+  const { store, calls } = fakeBlob(t);
 
-  assert.equal(users.storageMode(), "kv");
+  assert.equal(users.storageMode(), "blob");
   assert.equal(users.canWrite(), true);
 
   await users.addUser({ number: "482913", password: "letmeinplease", role: "admin" });
 
-  // what was written is a JSON list, hashed, and readable straight back
-  const saved = JSON.parse(store.get(users.KV_KEY));
+  const saved = JSON.parse(store.get(users.BLOB_PATH));
   assert.equal(saved.length, 1);
   assert.equal(saved[0].number, "482913");
   assert.ok(auth.isHashed(saved[0].password));
-  assert.equal(calls.some((c) => c.command[0] === "SET"), true);
+  assert.equal(calls.some((call) => call.method === "put"), true);
+  assert.equal(calls.every((call) => call.options.access === "private"), true, "all operations explicitly use private access");
+  assert.equal(calls.some((call) => call.options.addRandomSuffix === false && call.options.allowOverwrite === true), true);
 
   const back = await users.verifyCredentials("482913", "letmeinplease");
-  assert.equal(back.ok, true, "the account survives the round trip to the store");
+  assert.equal(back.ok, true, "the account survives the private Blob round trip");
 });
 
-test("an unreachable Upstash falls back to the environment instead of opening the door", async (t) => {
+test("an unreachable Blob falls back to the environment instead of opening the door", async (t) => {
   sandbox(t);
-  process.env.KV_REST_API_URL = "https://fake-upstash.example";
-  process.env.KV_REST_API_TOKEN = "wrong-token";
+  process.env.BLOB_READ_WRITE_TOKEN = "blob-test-token";
   process.env.PRISM_USERS = JSON.stringify([{ number: "482913", password: "seed-password", role: "admin" }]);
-  const original = global.fetch;
-  global.fetch = async () => ({ ok: false, status: 401, json: async () => ({ error: "unauthorised" }) });
+  users._setBlobSdkForTests({ get: async () => { throw new Error("storage unavailable"); }, put: async () => {} });
   t.after(() => {
-    global.fetch = original;
-    delete process.env.KV_REST_API_URL;
-    delete process.env.KV_REST_API_TOKEN;
+    users._setBlobSdkForTests(null);
+    delete process.env.BLOB_READ_WRITE_TOKEN;
     delete process.env.PRISM_USERS;
   });
 
-  // the fallback is the seed list, never "everybody in"
   assert.equal((await users.listUsers()).length, 1);
   assert.equal((await users.verifyCredentials("482913", "seed-password")).ok, true);
   assert.equal((await users.verifyCredentials("111222", "anything")).ok, false);
 });
 
-test("the first account written to an empty Upstash keeps the environment seed", async (t) => {
+test("the first account written to an empty Blob preserves and hashes the environment seed", async (t) => {
   sandbox(t);
-  const { store } = fakeUpstash(t, "");
+  const { store } = fakeBlob(t, "[]");
   process.env.PRISM_USERS = JSON.stringify([{ number: "482913", password: "seed-password", role: "admin" }]);
   t.after(() => delete process.env.PRISM_USERS);
 
   await users.addUser({ number: "111222", password: "second-password" });
 
-  const saved = JSON.parse(store.get(users.KV_KEY));
-  assert.equal(saved.length, 2, "the seed is not dropped when the first real account is added");
+  const saved = JSON.parse(store.get(users.BLOB_PATH));
+  assert.equal(saved.length, 2, "the seed is not dropped when the first account is added");
   assert.deepEqual(saved.map((u) => u.number).sort(), ["111222", "482913"]);
+  assert.ok(saved.every((u) => auth.isHashed(u.password)), "all stored passwords are hashed, including the seed");
 });
