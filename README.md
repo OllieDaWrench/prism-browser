@@ -116,10 +116,11 @@ If Live mode is unavailable the app says so and runs proxy-only. `GET /live/stat
 | `HOST` | `0.0.0.0` | Interface to bind |
 | `PRISM_CHROME` | auto-detected | Chromium/Chrome/Edge executable for Live mode |
 | `PRISM_NO_LIVE` | unset | Set to `1` to disable the live engine entirely |
-| `PRISM_HEADLESS` | unset | Set to `0` to run Live mode in a real window instead of headless |
+| `PRISM_HEADLESS` | unset | Set to `1` to run Live mode headless (servers/CI). Default is a real window |
+| `PRISM_PROFILE_DIR` | `.chrome-profile/` | Where the live browser keeps cookies and clearance |
 | `PORT` | `3000` | Port used by the launchers and the server |
 | `PRISM_ALLOW_PRIVATE` | unset | Set to `1` to allow proxying to private/local addresses |
-| `PRISM_UA` | a desktop Chrome UA | User agent sent upstream |
+| `PRISM_UA` | the browser's own UA | Overrides the user agent (leave alone — see below) |
 
 ## Deploying to Vercel (and why the hosted copy is proxy-only)
 
@@ -193,7 +194,7 @@ The live engine gets out of the way as much as it can:
   page script runs, and a desktop Chrome user agent — so it does not advertise being automated.
 - It watches each page it lands on; if a challenge is on screen it tells the UI, which prompts you
   to click the checkbox rather than leaving a blank frame.
-- `PRISM_HEADLESS=0 npm start` opens a **real window** instead of a headless one. Some interactive
+- `PRISM_HEADLESS=1 npm start` runs Live mode headless instead of in a real window. Some interactive
   challenge flows are happier in a visible browser.
 
 The proxy engine sends a self-consistent Chrome fingerprint (client hints matching its user agent,
@@ -243,7 +244,7 @@ big SPAs listed above. That is exactly what the live engine is for.
 
 ## How the live engine works
 
-`lib/live.js` launches `chrome --headless=new --remote-debugging-port=0` with a throwaway profile,
+`lib/live.js` launches `chrome --remote-debugging-port=0` with a profile kept in `.chrome-profile/`
 discovers the DevTools endpoint from the `DevToolsActivePort` file, and speaks CDP over Node's
 built-in `WebSocket` (no puppeteer, no extra dependencies). Each Prism tab gets its own target and
 flattened session:
@@ -254,6 +255,19 @@ flattened session:
 
 Frames are the only thing leaving the browser process; the sites' own JavaScript runs where it
 expects to, which is why JavaScript-heavy sites finally work.
+
+### Why it is a real window, and why that matters
+
+Live mode runs a **real browser window**, parked off-screen — not a headless one. Bot protection
+fingerprints headless Chrome, and it also compares the user agent against everything else the
+browser reports. Prism used to force a hardcoded Windows Chrome 131 user agent, so a Mac running a
+current Chrome announced itself as an out-of-date Windows machine: an instant challenge, even in a
+real window. Now the browser keeps its own user agent, and only the `HeadlessChrome` token is
+rewritten when you deliberately run headless (`PRISM_HEADLESS=1`).
+
+The browser profile lives in `.chrome-profile/` instead of a throwaway temp directory, so cookies —
+including the clearance cookie a site hands out after a bot check — survive restarts. Passing a bot
+check is then a one-time event per site rather than every launch.
 
 ## API surface
 
@@ -301,7 +315,7 @@ npm i --no-save jsdom && npm test
 - Proxied pages are rendered in an iframe on Prism's own origin, so a hostile page could in principle
   reach the UI's JavaScript. Run Prism on localhost, and do not expose it to the internet as-is.
 - Cookies live in your browser (scoped per target path); Prism itself stores no credentials.
-- The live engine runs whatever the page executes, inside a fresh headless profile under your OS
+- The live engine runs whatever the page executes, inside a persistent profile under your OS
   user. Treat it like running a browser.
 
 ## Layout

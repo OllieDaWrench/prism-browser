@@ -4,3 +4,6 @@ dist/
 # local noise
 .DS_Store
 *.log
+
+# the live browser's profile (cookies, bot-check clearance)
+.chrome-profile/

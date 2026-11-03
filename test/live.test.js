@@ -237,3 +237,145 @@ test("PRISM_CHROME overrides discovery", () => {
     else process.env.PRISM_CHROME = previous;
   }
 });
+
+test("a real window keeps the browser's own user agent", () => {
+  const { userAgentFor } = require("../lib/live");
+  const macChrome =
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36";
+
+  // The bug that got people stuck: a hardcoded Windows Chrome 131 UA on a Mac
+  // running something much newer. That mismatch is a bot signal.
+  const previous = process.env.PRISM_UA;
+  delete process.env.PRISM_UA;
+  try {
+    assert.equal(userAgentFor(macChrome, false), macChrome);
+    // headless still has to stop announcing "HeadlessChrome"
+    assert.match(userAgentFor("Mozilla/5.0 (Macintosh) HeadlessChrome/141.0.0.0", true), /\) Chrome\/141/);
+    assert.doesNotMatch(userAgentFor("Mozilla/5.0 (Macintosh) HeadlessChrome/141.0.0.0", true), /Headless/);
+    // an explicit override is still honoured
+    process.env.PRISM_UA = "custom-agent";
+    assert.equal(userAgentFor(macChrome, false), "custom-agent");
+  } finally {
+    if (previous === undefined) delete process.env.PRISM_UA;
+    else process.env.PRISM_UA = previous;
+  }
+});
+
+test("the browser profile is kept so a challenge is a one-time event", () => {
+  const fs = require("fs");
+  const os = require("os");
+  const path = require("path");
+  const { LiveBrowser } = require("../lib/live");
+
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "prism-profile-"));
+  const previous = process.env.PRISM_PROFILE_DIR;
+  process.env.PRISM_PROFILE_DIR = path.join(tmp, "profile");
+
+  try {
+    const browser = new LiveBrowser();
+    const dir = browser.profileDir();
+    assert.equal(dir, path.join(tmp, "profile"));
+    assert.ok(fs.existsSync(dir), "profile directory created");
+
+    // a crashed run leaves a lock behind; the next start must clear it
+    fs.writeFileSync(path.join(dir, "SingletonLock"), "");
+    const browser2 = new LiveBrowser();
+    assert.equal(browser2.profileDir(), dir);
+    assert.equal(fs.existsSync(path.join(dir, "SingletonLock")), false);
+
+    // and it is stable, so cookies survive a restart
+    assert.equal(browser.profileDir(), dir);
+  } finally {
+    if (previous === undefined) delete process.env.PRISM_PROFILE_DIR;
+    else process.env.PRISM_PROFILE_DIR = previous;
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test("status says how the browser is running", () => {
+  const { LiveBrowser } = require("../lib/live");
+  const status = new LiveBrowser().status();
+  assert.equal(typeof status.headless, "boolean");
+  assert.ok("profile" in status);
+});
+
+test("headless is opt-in, a window is the default", () => {
+  const fs = require("fs");
+  const path = require("path");
+  const source = fs.readFileSync(path.join(__dirname, "..", "lib", "live.js"), "utf8");
+  // the flag is read as an explicit opt-in, never as "unless someone said no"
+  assert.match(source, /PRISM_HEADLESS \|\| ""/);
+  assert.match(source, /window-position=-32000,-32000/);
+});
+
+test("a session leaves the browser's own identity alone", async () => {
+  const mock = await startMockBrowser();
+  const ws = await openWs(mock.url);
+  const cdp = new Cdp(ws);
+
+  const messages = [];
+  const conn = { send: (m) => messages.push(m), close() {}, onJSON() {}, on() {} };
+  const session = new LiveSession(conn, "https://www.youtube.com/");
+
+  // exactly what LiveBrowser hands a session: the browser's real user agent and
+  // the fact that it is a window, not headless
+  await session.start({
+    cdp,
+    realUserAgent:
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36",
+    headless: false,
+  });
+  await new Promise((r) => setTimeout(r, 60));
+
+  // Nothing rewrote the user agent. Overriding it used to make a Mac announce
+  // itself as an old Windows Chrome, which is what triggered Cloudflare.
+  const overrides = mock.seen.commands.filter((c) => c === "Network.setUserAgentOverride");
+  assert.equal(overrides.length, 0, "a real window must keep its own user agent");
+
+  // and the in-page script no longer touches a genuine browser's navigator
+  assert.match(mock.seen.stealth, /if \(navigator\.webdriver\)/);
+  ws.close();
+  mock.server.close();
+});
+
+test("a headless session still hides that it is headless", async () => {
+  const mock = await startMockBrowser();
+  const ws = await openWs(mock.url);
+  const cdp = new Cdp(ws);
+
+  const sent = [];
+  const conn = { send: () => {}, close() {}, onJSON() {}, on() {} };
+  const session = new LiveSession(conn, "about:blank");
+  const originalSend = cdp.send.bind(cdp);
+  cdp.send = (method, params, sessionId) => {
+    if (method === "Network.setUserAgentOverride") sent.push(params);
+    return originalSend(method, params, sessionId);
+  };
+
+  await session.start({
+    cdp,
+    realUserAgent: "Mozilla/5.0 (Macintosh) HeadlessChrome/141.0.0.0 Safari/537.36",
+    headless: true,
+  });
+  await new Promise((r) => setTimeout(r, 60));
+
+  assert.equal(sent.length, 1, "headless has to be cleaned up");
+  assert.doesNotMatch(sent[0].userAgent, /Headless/);
+  ws.close();
+  mock.server.close();
+});
+
+test("no user agent is invented when the browser will not say who it is", async () => {
+  const mock = await startMockBrowser();
+  const ws = await openWs(mock.url);
+  const cdp = new Cdp(ws);
+  const conn = { send: () => {}, close() {}, onJSON() {}, on() {} };
+  const session = new LiveSession(conn, "about:blank");
+
+  await session.start({ cdp, realUserAgent: "", headless: false });
+  await new Promise((r) => setTimeout(r, 40));
+  assert.equal(mock.seen.commands.filter((c) => c === "Network.setUserAgentOverride").length, 0);
+
+  ws.close();
+  mock.server.close();
+});

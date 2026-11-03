@@ -238,9 +238,9 @@ function renderEngine() {
         ? "Hosted copy — proxy engine only. Download Prism for Live mode (real browser, Cloudflare-capable)."
         : `Proxy engine only — ${live.reason || "no Chromium browser found"}`;
   } else if (preference === "auto") {
-    engineNote.textContent = `Auto engine. Live browser ready (${live.browser}) — pages that need real JavaScript will open there.`;
+    engineNote.textContent = `Auto engine. Live browser ready (${live.browser}${live.headless ? ", headless" : ", real window"}) — pages that need real JavaScript will open there.`;
   } else if (preference === "live") {
-    engineNote.textContent = `Live engine pinned (${live.browser}).`;
+    engineNote.textContent = `Live engine pinned (${live.browser}${live.headless ? ", headless" : ", real window"}).`;
   } else {
     engineNote.textContent = "Proxy engine pinned. Junk-free, but JavaScript-heavy sites may break.";
   }
