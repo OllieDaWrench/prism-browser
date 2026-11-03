@@ -312,3 +312,96 @@ test("a deploy with no proxy at all says so instead of showing a blank page", as
   assert.match(window.document.getElementById("engine-note").textContent, /not running its proxy/);
   dom.window.close();
 });
+
+test("a Cloudflare-blocked page is escalated to Live mode automatically", async () => {
+  if (!JSDOM) return;
+  const dom = makeUi(true);
+  const { window } = dom;
+  await tick();
+
+  submit(window, "#url", "reddit.com");
+  await tick();
+  // auto mode sends reddit to live anyway; force proxy to model a site that
+  // only reveals its bot wall through the proxy
+  window.localStorage.setItem("prism:engine", "proxy");
+  window.document.getElementById("view").dispatchEvent(new window.Event("load"));
+  submit(window, "#url", "news.example.com");
+  await tick();
+  assert.match(window.document.getElementById("view").src, /\/https\/news\.example\.com\//);
+
+  window.postMessage(
+    { type: "prism-blocked", vendor: "Cloudflare", url: "https://news.example.com/" },
+    "*"
+  );
+  await tick();
+
+  // it switched to the live engine and said why
+  assert.match(window.document.getElementById("banner-text").textContent, /Cloudflare challenged this page/);
+  assert.equal(window.document.getElementById("engine-label").textContent, "Live");
+  // a live session is showing, and it is pointed at the blocked page — either a
+  // fresh socket or a nav command on the session that is already open
+  assert.equal(window.document.getElementById("live").hidden, false);
+  const liveSessions = FakeWebSocket.instances.filter((s) => s.url.includes("/live/ws"));
+  assert.ok(liveSessions.length >= 1, "expected a live session");
+  const pointedAtNews = liveSessions.some(
+    (s) =>
+      s.url.includes("news.example.com") ||
+      s.sent.some((m) => m.t === "nav" && m.url.includes("news.example.com"))
+  );
+  assert.ok(pointedAtNews, "the live session should be navigating to the blocked page");
+
+  // and it does not ping-pong: a second wall on the same url stays in live
+  const before = FakeWebSocket.instances.length;
+  window.postMessage(
+    { type: "prism-blocked", vendor: "Cloudflare", url: "https://news.example.com/" },
+    "*"
+  );
+  await tick();
+  assert.equal(FakeWebSocket.instances.length, before);
+  dom.window.close();
+});
+
+test("without Live mode a Cloudflare block explains how to get through", async () => {
+  if (!JSDOM) return;
+  const dom = makeUi(false, { hosted: true });
+  const { window } = dom;
+  await tick();
+
+  window.postMessage(
+    { type: "prism-blocked", vendor: "Cloudflare", url: "https://www.reddit.com/" },
+    "*"
+  );
+  await tick();
+
+  assert.match(
+    window.document.getElementById("banner-text").textContent,
+    /Cloudflare blocks the proxy engine/
+  );
+  assert.equal(window.document.getElementById("banner-action").textContent, "How?");
+
+  // the explanation tells them to run it locally
+  window.document.getElementById("banner-action").click();
+  await tick();
+  assert.equal(window.document.getElementById("live-overlay").hidden, false);
+  assert.match(window.document.getElementById("live-hint").textContent, /npm start/);
+  dom.window.close();
+});
+
+test("a live-mode challenge points at the checkbox instead of hanging", async () => {
+  if (!JSDOM) return;
+  const dom = makeUi(true);
+  const { window } = dom;
+  await tick();
+
+  submit(window, "#url", "twitch.tv");
+  await tick();
+  const socket = FakeWebSocket.instances.find((s) => s.url.includes("/live/ws"));
+  socket.dispatch("message", {
+    data: JSON.stringify({ t: "challenge", vendor: "Cloudflare", url: "https://twitch.tv/" }),
+  });
+  await tick();
+
+  assert.match(window.document.getElementById("banner-text").textContent, /checking this browser/);
+  assert.match(window.document.getElementById("banner-text").textContent, /click it/);
+  dom.window.close();
+});

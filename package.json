@@ -1,6 +1,6 @@
 {
   "name": "prism",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "private": true,
   "description": "In-page proxy browser with a path-mapped proxy engine and a real-browser live engine",
   "main": "server.js",

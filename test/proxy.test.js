@@ -110,3 +110,36 @@ test("the SSRF guard rejects local addresses by default", async () => {
   if (previous === undefined) delete process.env.PRISM_ALLOW_PRIVATE;
   else process.env.PRISM_ALLOW_PRIVATE = previous;
 });
+
+test("upstream requests carry a self-consistent Chrome fingerprint", () => {
+  const { buildUpstreamHeaders } = require("../lib/proxy");
+  const headers = buildUpstreamHeaders(
+    {
+      headers: {
+        host: "prism.local",
+        accept: "text/html",
+        referer: "http://prism.local/https/example.com/page",
+        origin: "http://prism.local",
+        "sec-fetch-site": "cross-site",
+        "sec-fetch-mode": "cors",
+      },
+    },
+    "https://example.com/page",
+    "http://prism.local"
+  );
+
+  // client hints agree with the Chrome user agent
+  assert.match(headers["user-agent"], /Chrome\//);
+  assert.match(headers["sec-ch-ua"], /Google Chrome";v="131"/);
+  assert.equal(headers["sec-ch-ua-platform"], '"Windows"');
+
+  // fetch metadata describes Prism's own request, not the inbound one
+  assert.equal(headers["sec-fetch-site"], "same-origin");
+  assert.equal(headers["sec-fetch-mode"], "navigate");
+  assert.equal(headers["sec-fetch-dest"], "document");
+  assert.equal(headers["sec-fetch-user"], "?1");
+
+  // and the referer/origin point at the real site, so CSRF checks pass
+  assert.equal(headers.referer, "https://example.com/page");
+  assert.equal(headers.origin, "https://example.com");
+});

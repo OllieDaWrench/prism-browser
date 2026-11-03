@@ -43,6 +43,8 @@ let live = { available: false, state: "idle", browser: null, reason: "", hint: "
 let transport = { mode: "path", base: null };
 /** false when nothing proxies at all — e.g. the serverless function is missing. */
 let proxyReachable = true;
+/** Pages already moved to Live mode because of a bot wall (avoid flip-flopping). */
+const autoEscalated = new Set();
 let liveConn = null;
 let liveSession = null; // { url }
 
@@ -437,6 +439,13 @@ function handleLiveMessage(msg) {
         setCurrentUrl(msg.url);
       }
       return;
+    case "challenge":
+      showBanner(
+        `${msg.vendor || "Bot protection"} is checking this browser. If a checkbox appears, click it — then the page loads normally.`,
+        "Reload",
+        () => liveSend({ t: "reload" })
+      );
+      return;
     case "popup":
       if (msg.url) showBanner(`This site tried to open a popup: ${msg.url}`, "Open here", () => navigate(msg.url));
       return;
@@ -577,13 +586,16 @@ function setCurrentUrl(url) {
   renderEngine();
 }
 
-function navigate(raw, { push = true, force = false } = {}) {
+function navigate(raw, { push = true, force = false, engine: pinnedEngine } = {}) {
   const input = describeInput(raw);
   if (!input) return;
 
   const current = stack[index];
+  // `engine` is set when replaying a history entry, which must keep the engine
+  // it was loaded with. Everything else resolves from the current preference,
+  // including forced re-loads (that is how a bot wall escalates to Live mode).
   let engine;
-  if (force && current) engine = current.engine;
+  if (pinnedEngine) engine = pinnedEngine;
   else if (input.url) engine = resolveEngine(input.url);
   else engine = liveUsable() && preference !== "proxy" ? "live" : "proxy";
 
@@ -632,13 +644,15 @@ document.querySelectorAll("[data-go]").forEach((btn) => {
 backBtn.addEventListener("click", () => {
   if (index <= 0) return;
   index -= 1;
-  navigate(stack[index].url, { push: false, force: true });
+  const entry = stack[index];
+  navigate(entry.url, { push: false, force: true, engine: entry.engine });
 });
 
 fwdBtn.addEventListener("click", () => {
   if (index >= stack.length - 1) return;
   index += 1;
-  navigate(stack[index].url, { push: false, force: true });
+  const entry = stack[index];
+  navigate(entry.url, { push: false, force: true, engine: entry.engine });
 });
 
 reloadBtn.addEventListener("click", () => {
@@ -660,7 +674,51 @@ window.addEventListener("message", (event) => {
   if (event.data.type === "prism-url" && event.data.url) setCurrentUrl(event.data.url);
   if (event.data.type === "prism-go" && event.data.url) navigate(event.data.url);
   if (event.data.type === "prism-proxy-error") onProxyFailure();
+  if (event.data.type === "prism-blocked") onBotWall(event.data.vendor || "Bot protection", event.data.url);
 });
+
+/**
+ * A proxied page came back as a bot wall (Cloudflare, DataDome…). The proxy
+ * cannot pass those; the live browser usually can, because it is a real
+ * browser on the user's own network.
+ */
+function onBotWall(vendor, pageUrl) {
+  const key = pageUrl || (stack[index] && stack[index].url) || "";
+  const host = hostOf(key) || key;
+
+  if (liveUsable() && !autoEscalated.has(key)) {
+    autoEscalated.add(key);
+    showBanner(
+      `${vendor} challenged this page, so Prism opened it in Live mode — a real browser on your machine. If you see a checkbox, click it.`,
+      "Stay in Live",
+      () => {
+        banner.hidden = true;
+      }
+    );
+    setPreference("live");
+    navigate(key, { push: false, force: true });
+    return;
+  }
+
+  if (liveUsable()) {
+    showBanner(`${vendor} is still checking this page. Click the checkbox in the page, or reload.`, "Reload", () => {
+      reloadBtn.click();
+    });
+    return;
+  }
+
+  showBanner(
+    `${vendor} blocks the proxy engine (it sees a server, not your browser). Live mode on your own machine loads ${host} normally.`,
+    "How?",
+    () => {
+      showStage("live");
+      liveOverlay.hidden = false;
+      liveReason.textContent = `${vendor} blocks proxy fetches.`;
+      liveHint.textContent =
+        "Run Prism locally (`npm start`, or Open Prism.bat on Windows). Live mode then drives your installed Chrome, on your own network, which gets through this check.";
+    }
+  );
+}
 
 function onProxyFailure() {
   if (stack[index] && stack[index].engine === "live") return;
