@@ -37,19 +37,6 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Fetch a portable Node runtime for the offline smoke test
-        run: |
-          set -euo pipefail
-          mkdir -p build/runtimes/mac
-          base="https://nodejs.org/dist/v${NODE_VERSION}"
-          # Only the x64 archive is needed: the test machine is Linux, and this
-          # unpacked runtime stands in for what a user's launcher prepares.
-          curl -fsSL --retry 3 -o /tmp/node-mac.tar.gz \
-            "$base/node-v${NODE_VERSION}-darwin-x64.tar.gz"
-          mkdir -p build/runtimes/mac/mac-x64
-          tar -xzf /tmp/node-mac.tar.gz -C build/runtimes/mac/mac-x64 --strip-components=1
-          build/runtimes/mac/mac-x64/bin/node -v
-
       - name: Build macOS bundle
         run: ./scripts/package.sh --platform macos --deps dist/mac
 
@@ -117,8 +104,15 @@ jobs:
           unzip -q dist/mac/Prism-macOS.zip -d /tmp/smoke
           cd /tmp/smoke/Prism
 
-          # Stand in for the runtime the launcher would have unpacked.
-          mkdir -p runtime && cp -R "$GITHUB_WORKSPACE/build/runtimes/mac/mac-x64" runtime/mac-x64
+          # Stand in for the runtime the launcher would have unpacked: an
+          # official Node build, in the directory layout the launcher creates,
+          # and one this machine can actually execute. (Downloading a darwin
+          # or win32 runtime here would only prove that a Mach-O binary does
+          # not run on Linux.)
+          NODE_ROOT="$(dirname "$(dirname "$(readlink -f "$(command -v node)")")")"
+          echo "using $NODE_ROOT"
+          mkdir -p runtime/mac-x64
+          cp -R "$NODE_ROOT/." runtime/mac-x64/
 
           # Let the download endpoint hand out the real bundle from dist/.
           mkdir -p dist && cp "$GITHUB_WORKSPACE/dist/mac/Prism-macOS.zip" dist/
@@ -126,6 +120,7 @@ jobs:
           # Exactly what a machine without admin rights has: this folder, nothing else.
           env -i HOME="$HOME" PATH=/usr/bin:/bin PRISM_NO_LIVE=1 PORT=3999 \
             ./runtime/mac-x64/bin/node server.js &
+          SERVER_PID=$!
           for _ in $(seq 1 60); do
             curl -fsS -m 1 http://127.0.0.1:3999/healthz >/dev/null 2>&1 && break
             sleep 0.5
@@ -139,7 +134,7 @@ jobs:
           curl -fsS -D /tmp/headers -o /tmp/download.zip http://127.0.0.1:3999/download/mac
           grep -qi 'content-disposition: attachment; filename="Prism-macOS.zip"' /tmp/headers
           head -c 2 /tmp/download.zip | od -An -c | tr -d ' ' | grep -q 'PK'
-          pkill -f "server.js" || true
+          kill "$SERVER_PID" || true
 
       - name: Publish release
         env:
