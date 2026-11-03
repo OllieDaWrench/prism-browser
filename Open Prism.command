@@ -16,10 +16,36 @@
 #
 # which installs to ~/Prism and leaves a launcher that opens on a double-click.
 
+set -o pipefail
 cd "$(dirname "$0")" || exit 1
 BUNDLE_DIR="$(pwd)"
+VERSION="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$BUNDLE_DIR/package.json" | head -1)"
+[ -n "$VERSION" ] || VERSION="unknown"
 
-echo "Prism"
+case "${1:-}" in
+  --version|-v)
+    echo "Prism v$VERSION"
+    exit 0
+    ;;
+  --update)
+    echo "Prism v$VERSION — checking for updates…"
+    command -v curl >/dev/null 2>&1 || { echo "curl is missing from this Mac."; exit 1; }
+    for port in {3000..3010}; do
+      if curl -fsS -m 1 "http://localhost:$port/healthz" 2>/dev/null | grep -q '"prism":true'; then
+        echo "Close the running Prism window first, then run this update command again."
+        exit 1
+      fi
+    done
+    echo "Updating Prism. Your Node runtime and browser profile will be kept."
+    if ! curl -fsSL https://prism-browser.vercel.app/install.sh | PRISM_INSTALL_DIR="$BUNDLE_DIR" bash; then
+      echo "Prism update did not complete. Check the output above, then try again."
+      exit 1
+    fi
+    exit 0
+    ;;
+esac
+
+echo "Prism v$VERSION"
 echo "-----"
 
 # ---------------------------------------------------------------- node runtime
@@ -168,7 +194,7 @@ fi
 # ---------------------------------------------------------------- already running?
 find_running_prism() {
   local port
-  for port in $(seq 3000 3010); do
+  for port in {3000..3010}; do
     if curl -fsS -m 1 "http://localhost:$port/healthz" 2>/dev/null | grep -q '"prism":true'; then
       echo "$port"
       return 0

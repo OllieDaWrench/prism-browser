@@ -71,6 +71,10 @@
               Get Prism for Mac or Windows — one command, or the zip
             </button>
           </p>
+          <p class="engine-note" id="terminal-commands" hidden>
+            macOS Terminal: <code>"$HOME/Prism/Open Prism.command" --version</code>
+            &nbsp;·&nbsp; <code>"$HOME/Prism/Open Prism.command" --update</code>
+          </p>
         </section>
         <iframe
           id="view"
@@ -123,8 +127,8 @@
         <button type="button" class="modal-close" id="download-close" aria-label="Close" data-download-close>✕</button>
         <h2 id="download-title">Get Prism on this computer</h2>
         <p class="modal-lead">
-          Prism runs on your own computer, so it can drive the Chrome, Edge or Chromium already there —
-          that is what makes Live mode, and Cloudflare-protected sites, work.
+          Prism can start a browser on your computer's network, which may help when the hosted proxy is
+          refused. Sites can still challenge or block it; Prism cannot guarantee access.
         </p>
 
         <div class="modal-option">
@@ -159,7 +163,7 @@
         </div>
       </div>
     </div>
-    <div id="ver">2.9.6</div>
+    <div id="ver">2.9.7</div>
     <script src="/app.js"></script>
   </body>
 </html>

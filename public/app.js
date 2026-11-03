@@ -236,7 +236,7 @@ function renderEngine() {
     engineNote.textContent = live.state === "starting"
       ? "Starting the live browser engine…"
       : live.hosted
-        ? "Hosted copy — proxy engine only. Download Prism for Live mode (real browser, Cloudflare-capable)."
+        ? "Hosted copy — proxy engine only. Download Prism to try Live mode on your computer; sites can still challenge or block it."
         : `Proxy engine only — ${live.reason || "no Chromium browser found"}`;
   } else if (preference === "auto") {
     engineNote.textContent = `Auto engine. Live browser ready (${live.browser}${live.headless ? ", headless" : ", real window"}) — pages that need real JavaScript will open there.`;
@@ -382,9 +382,9 @@ function showLiveUnavailable(context) {
   if (live.hosted) {
     liveReason.textContent =
       lead +
-      "This is the hosted copy of Prism. Live mode needs a real browser on your own machine, so it only runs locally — that is also the only way Cloudflare-protected sites load.";
+      "This is the hosted copy of Prism. Live mode needs a browser running on your computer, so it only runs locally. A local browser may help, but it cannot guarantee that a site will allow access.";
     liveHint.textContent =
-      "Download Prism, unzip it, and start it with the launcher inside. It uses the Chrome, Edge or Chromium already on your computer.";
+      "Download Prism, unzip it, and start it with the launcher inside. It starts a locally installed Chrome, Edge or Chromium browser; the site may still challenge or block it.";
   } else {
     liveReason.textContent = lead + (live.reason || "No Chromium-based browser was found.");
     liveHint.textContent = live.hint || "";
@@ -404,9 +404,9 @@ function showLiveUnavailable(context) {
  *
  * Live mode drives a Chrome that Prism started, over the DevTools protocol,
  * with its own profile — and bot protection can tell. When a site challenges
- * that browser, the one reliable way through is the browser the user actually
- * browses in. This only exists on the local app; the hosted copy has no desktop
- * to open anything on.
+ * that browser, Prism can offer to open the URL in the user's everyday browser.
+ * That may help, but it is not guaranteed. This only exists on the local app;
+ * the hosted copy has no desktop to open anything on.
  * ------------------------------------------------------------------ */
 async function openInOwnBrowser(url) {
   const target = url || (stack[index] && stack[index].url) || urlInput.value;
@@ -610,8 +610,8 @@ function handleLiveMessage(msg) {
     case "challenge": {
       const vendor = msg.vendor || "Bot protection";
       showBanner(
-        `${vendor} does not trust the browser Prism started. Click the checkbox in the page if one appears — or open this address in your own Chrome, where the check passes.`,
-        "Open in my Chrome",
+        `${vendor} is challenging the browser Prism started. Complete any checkbox or other check shown, or try the address in your everyday browser. The site may still block access based on its own rules.`,
+        "Open in browser",
         () => openInOwnBrowser(msg.url)
       );
       return;
@@ -861,8 +861,8 @@ window.addEventListener("message", (event) => {
 
 /**
  * A proxied page came back as a bot wall (Cloudflare, DataDome…). The proxy
- * cannot pass those; the live browser usually can, because it is a real
- * browser on the user's own network.
+ * cannot pass those. Live mode can try a local browser, but sites may still
+ * challenge or block that browser, account or network.
  */
 function onBotWall(vendor, pageUrl) {
   const key = pageUrl || (stack[index] && stack[index].url) || "";
@@ -883,29 +883,29 @@ function onBotWall(vendor, pageUrl) {
   }
 
   if (liveUsable()) {
-    // Live was tried for this page and the wall is still there. Live runs a
-    // Chrome that Prism started over the DevTools protocol, which bot
-    // protection can recognise; the dependable route is the user's own browser.
+    // Live was tried for this page and the wall is still there. The site may
+    // recognise the separate browser Prism started; the everyday browser may
+    // help, but account or network blocks can affect it too.
     showBanner(
-      `${vendor} is blocking the browser Prism started. Open the address in your own Chrome and the check passes.`,
-      "Open in my Chrome",
+      `${vendor} is still challenging Prism's local browser. Try the address in your everyday browser; Prism cannot override a block on your account or network.`,
+      "Open in browser",
       () => openInOwnBrowser(key)
     );
     return;
   }
 
   showBanner(
-    `${vendor} blocks the proxy engine — it sees a server, not your browser. The local app drives your own Chrome, on your own network, and gets through.`,
+    `${vendor} blocks the hosted proxy request. The local app can try a browser on your network, but the site may still challenge or block it.`,
     "How?",
     () => {
       showLiveUnavailable(`${vendor} blocks requests that come from a server.`);
       if (!live.hosted) {
         liveHint.textContent =
-          "In the local app, Prism opens this page in Live mode — your own Chrome, your own IP — where the check can actually be passed.";
+          "In the local app, Prism can open this page in a local browser on your network. Complete any check shown; access is still controlled by the site.";
       }
     }
   );
-  if (live.hosted) showDownloadBanner(`${vendor} blocks the hosted proxy. Run Prism locally to load ${host}.`);
+  if (live.hosted) showDownloadBanner(`${vendor} blocks the hosted proxy. Run Prism locally to try Live mode for ${host}.`);
 }
 
 function onProxyFailure() {
@@ -965,6 +965,8 @@ async function boot() {
     })(),
   ]);
   renderEngine();
+  const terminalCommands = document.getElementById("terminal-commands");
+  if (terminalCommands) terminalCommands.hidden = !!live.hosted;
   if (!proxyReachable) {
     showDownloadBanner(
       "This copy of Prism cannot proxy: the proxy endpoint is not answering. The local app works:"
@@ -973,7 +975,7 @@ async function boot() {
     // Hosted copies can proxy, but never drive a browser: make the way out
     // visible instead of only mentioning it in a card the user has to find.
     showDownloadBanner(
-      "Hosted copy: proxy engine only. Most sites work; anything needing a real browser (or behind Cloudflare) needs the local app."
+      "Hosted copy: proxy engine only. For sites that reject the hosted request, try the local app; it cannot guarantee access if the site still blocks you."
     );
   }
 }

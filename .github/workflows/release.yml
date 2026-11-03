@@ -148,9 +148,10 @@ jobs:
           # Notes live in a file: a multi-line string inside a YAML block scalar
           # is easy to break, and this also lets the text use backticks freely.
           cat > /tmp/notes.md <<'NOTES'
-          Prism runs on your own computer, so it can drive the Chrome, Edge or
-          Chromium already installed there — that is what makes **Live mode**, and
-          any site behind Cloudflare, actually work.
+          Prism can start a locally installed Chromium browser for **Live mode**,
+          which may help when the hosted proxy is refused. Sites, including those
+          using Cloudflare, can still challenge or block the browser, account or
+          network; Prism does not bypass those access controls.
 
           ## No installer, no administrator rights
 
@@ -164,6 +165,14 @@ jobs:
 
             ```
             curl -fsSL https://prism-browser.vercel.app/install.sh | bash
+            ```
+
+            After the v2.9.7 install, check the version or update from Terminal
+            (close Prism first; the update keeps the Node runtime and browser profile):
+
+            ```
+            "$HOME/Prism/Open Prism.command" --version
+            "$HOME/Prism/Open Prism.command" --update
             ```
 
             It installs to `~/Prism` and leaves a launcher on your Desktop that

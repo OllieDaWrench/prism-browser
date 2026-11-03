@@ -119,6 +119,14 @@ macOS: the easiest route is one line in Terminal (Spotlight -> "Terminal"):
 That installs Prism to ~/Prism and puts "Prism" on your Desktop, which opens on
 a plain double-click — no "cannot be verified" warning. Details in step 2.
 
+From Terminal, you can check the version or update later (close Prism first):
+
+    "$HOME/Prism/Open Prism.command" --version
+    "$HOME/Prism/Open Prism.command" --update
+
+Updating replaces Prism's app files but keeps its downloaded Node runtime and
+browser profile. The update may ask you to sign in again.
+
 Prism unpacks its own copy of Node.js (the engine it runs on) into this folder
 the first time you start it. That is an ordinary download, roughly 50 MB, and it
 never asks for an administrator password. Because of it the zip you downloaded
@@ -149,8 +157,9 @@ is small — Prism serves the zip itself rather than sending you to a website.
 
 3. Use Prism there. Leave the engine on "Auto": pages that need a real
    browser (ChatGPT, Reddit, Spotify, Twitch, Cloudflare-protected sites)
-   open in Live mode, which drives the Chrome or Edge already on this
-   computer. If a site asks you to prove you are human, click the checkbox.
+   open in Live mode, which starts a local Chrome or Edge browser. If a site
+   asks you to prove you are human, complete the check. A site can still block
+   its browser, your account or network; Prism cannot override those rules.
 
 Stopping it: close the launcher window (Windows: the "Prism server" window).
 Removing it: delete this folder. Nothing was written anywhere else.

@@ -134,7 +134,9 @@ test("it installs into a home directory and leaves a double-clickable launcher",
   // and the thing the user actually clicks
   const desktop = path.join(home, "Desktop", "Prism.command");
   assert.ok(fs.existsSync(desktop), "desktop launcher created");
-  assert.match(fs.readFileSync(desktop, "utf8"), new RegExp(`exec "${dest}/Open Prism\\.command"`));
+  const desktopScript = fs.readFileSync(desktop, "utf8");
+  assert.match(desktopScript, new RegExp(`exec "${dest}/Open Prism\\.command"`));
+  assert.match(desktopScript, /Open Prism\.command" "\$@"/, "the desktop launcher forwards terminal options");
   assert.equal(fs.statSync(desktop).mode & 0o111, 0o111, "launcher is executable");
 
   fs.rmSync(home, { recursive: true, force: true });
@@ -146,6 +148,8 @@ test("an upgrade keeps the downloaded Node runtime", async (t) => {
   const dest = path.join(home, "Prism");
   fs.mkdirSync(path.join(dest, "runtime", "mac-arm64", "bin"), { recursive: true });
   fs.writeFileSync(path.join(dest, "runtime", "mac-arm64", "bin", "node"), "old");
+  fs.mkdirSync(path.join(dest, ".chrome-profile"), { recursive: true });
+  fs.writeFileSync(path.join(dest, ".chrome-profile", "profile-marker"), "keep me");
 
   const distZip = path.join(LOCAL_DIR, "Prism-macOS.zip");
   const hadDist = fs.existsSync(distZip);
@@ -172,6 +176,7 @@ test("an upgrade keeps the downloaded Node runtime", async (t) => {
 
   assert.match(run.stdout, /Keeping the existing Node runtime/);
   assert.equal(fs.readFileSync(path.join(dest, "runtime", "mac-arm64", "bin", "node"), "utf8"), "old");
+  assert.equal(fs.readFileSync(path.join(dest, ".chrome-profile", "profile-marker"), "utf8"), "keep me");
 
   fs.rmSync(home, { recursive: true, force: true });
 });
