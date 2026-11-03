@@ -22,7 +22,7 @@ if (!JSDOM) {
 }
 
 const ORIGIN = "http://127.0.0.1:4321";
-const html = fs.readFileSync(path.join(__dirname, "..", "public", "index.html"), "utf8").replace(
+const html = fs.readFileSync(path.join(__dirname, "..", "private", "app.html"), "utf8").replace(
   /<script src="\/app\.js"><\/script>/,
   ""
 );

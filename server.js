@@ -76,6 +76,7 @@ app.get("/api/auth/status", async (req, res) => {
     admin: session ? session.role === "admin" : false,
     needsSetup,
     configured: Boolean(auth.secret()),
+    required: gate.enabled(),
     storage: users.storageMode(),
     canWrite: users.canWrite(),
   });
@@ -237,6 +238,14 @@ app.all(proxyRoute, (req, res) => {
 app.get("/healthz", (req, res) =>
   res.json({ ok: true, prism: true, version: require("./package.json").version, uptime: process.uptime() })
 );
+
+/**
+ * Local copies still open the full app without sign-in. On Vercel the public
+ * root is the invitation page and /app is routed through api/auth/home.js.
+ */
+app.get(["/", "/app", "/index.html"], (req, res) => {
+  res.sendFile(path.join(__dirname, "private", "app.html"));
+});
 
 /**
  * Static files are served after every route, so a page like /admin wins over a

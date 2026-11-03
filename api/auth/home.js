@@ -1,18 +1,16 @@
 "use strict";
 
 /**
- * GET / (Vercel rewrite target) — choose the sign-in page or the app itself.
- *
- * Vercel serves public/index.html as a static root before the catch-all proxy
- * rewrite can run. The explicit / rewrite sends root visits here instead, so a
- * configured private site cannot accidentally show the app to signed-out users.
+ * GET /app (Vercel rewrite target) — serve the private app shell only to a
+ * signed-in user. The public root is a static invitation page in public/; the
+ * app shell lives outside Vercel's public output directory.
  */
 
 const fs = require("fs");
 const path = require("path");
 const gate = require("../../lib/gate");
 
-const APP_HTML = path.join(__dirname, "..", "..", "public", "index.html");
+const APP_HTML = path.join(__dirname, "..", "..", "private", "app.html");
 
 module.exports = function handler(req, res) {
   if (gate.enabled() && !gate.sessionFrom(req)) {

@@ -121,8 +121,8 @@ If Live mode is unavailable the app says so and runs proxy-only. `GET /live/stat
 | `PORT` | `3000` | Port used by the launchers and the server |
 | `PRISM_ALLOW_PRIVATE` | unset | Set to `1` to allow proxying to private/local addresses |
 | `PRISM_UA` | the browser's own UA | Overrides the user agent (leave alone — see below) |
-| `PRISM_AUTH_SECRET` | unset | 16+ random characters. Turns sign-in on; without it the site stays public |
-| `PRISM_AUTH` | unset | `1` requires sign-in locally too, `0` switches the gate off |
+| `PRISM_AUTH_SECRET` | unset | 16+ random characters; required for hosted sign-in and local sign-in |
+| `PRISM_AUTH` | unset | Local copies only: `1` requires sign-in, `0` keeps the local copy open |
 | `PRISM_USERS` | unset | A starting list, `[{"number":"482913","password":"...","role":"admin"}]` |
 | `BLOB_READ_WRITE_TOKEN` | unset | Vercel Blob — private account storage, added when you connect a Blob store |
 | `PRISM_USERS_FILE` | `data/users.json` | Where accounts go when there is no Blob store |
@@ -157,16 +157,17 @@ a token is never a session, and a session is never a token.
 
 **The installer** asks for the number and password on the terminal, exchanges them for that
 short-lived token, and only then downloads. The password never reaches a URL, a log or the shell
-history. A copy with no `PRISM_AUTH_SECRET` is not gated, and the installer skips the prompt.
+history. Local copies without `PRISM_AUTH_SECRET` stay open. Hosted deployments always fail closed; if the secret is missing, the installer stops and tells the owner to finish setup instead of attempting a public download.
 
 **The installed app does not ask you to sign in.** It runs on your own computer.
 
 ## Deploying to Vercel (and why the hosted copy is proxy-only)
 
-`vercel.json` routes every shape of request at a single function:
+`vercel.json` serves a public invitation page and routes the private app shell and proxy requests:
 
 ```
-/ and /index.html                -> /api/auth/home (login first unless signed in)
+/ and /index.html                -> public invitation page (sign-in)
+/app                             -> /api/auth/home (app shell only after sign-in)
 /api/:path*                      -> identity, so functions short-circuit the catch-all
 /live/status                     -> /api/live
 /https/:path*                    -> /api/proxy?__path=https/:path*

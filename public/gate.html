@@ -90,13 +90,13 @@
         fetch("/api/auth/status", { cache: "no-store" })
           .then(function (r) { return r.json(); })
           .then(function (s) {
-            if (s.authenticated) location.replace(s.admin ? "/admin" : "/");
+            if (s.authenticated) location.replace(s.admin ? "/admin" : "/app");
             if (s.needsSetup) setup.hidden = false;
             if (!s.configured) {
               // Sign-in cannot work yet, so say that instead of letting the form
               // fail with a server error.
               setup.innerHTML =
-                "Sign-in is not switched on for this copy: set <code>PRISM_AUTH_SECRET</code> " +
+                "Sign-in is not configured for this site yet: set <code>PRISM_AUTH_SECRET</code> " +
                 "(16+ characters) in the server's environment, then reload this page.";
               setup.hidden = false;
               submit.disabled = true;
@@ -122,7 +122,7 @@
             .then(function (r) { return r.json().then(function (b) { return { status: r.status, body: b }; }); })
             .then(function (result) {
               if (result.body && result.body.ok) {
-                location.replace(result.body.admin ? "/admin" : "/");
+                location.replace(result.body.admin ? "/admin" : "/app");
                 return;
               }
               error.textContent = (result.body && result.body.error) || "Sign-in failed.";

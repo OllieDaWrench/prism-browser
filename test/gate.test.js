@@ -41,26 +41,44 @@ function response() {
 
 function enable(t) {
   const previous = process.env.PRISM_AUTH_SECRET;
+  const previousAuth = process.env.PRISM_AUTH;
+  const previousVercel = process.env.VERCEL;
   process.env.PRISM_AUTH_SECRET = SECRET;
   delete process.env.PRISM_AUTH;
+  delete process.env.VERCEL;
   t.after(() => {
     if (previous === undefined) delete process.env.PRISM_AUTH_SECRET;
     else process.env.PRISM_AUTH_SECRET = previous;
-    delete process.env.PRISM_AUTH;
+    if (previousAuth === undefined) delete process.env.PRISM_AUTH;
+    else process.env.PRISM_AUTH = previousAuth;
+    if (previousVercel === undefined) delete process.env.VERCEL;
+    else process.env.VERCEL = previousVercel;
   });
 }
 
-test("the gate is off when no secret is configured", (t) => {
+test("a local gate is off when no secret is configured", (t) => {
   const previous = process.env.PRISM_AUTH_SECRET;
+  const previousVercel = process.env.VERCEL;
   delete process.env.PRISM_AUTH_SECRET;
+  delete process.env.VERCEL;
   t.after(() => {
     if (previous !== undefined) process.env.PRISM_AUTH_SECRET = previous;
+    if (previousVercel !== undefined) process.env.VERCEL = previousVercel;
   });
 
   assert.equal(gate.enabled(), false);
   const res = response();
   assert.equal(gate.check(request("/"), res), true, "a local copy keeps working");
   assert.equal(res.ended, false);
+});
+
+test("a hosted site always fails closed, even without a secret or with auth disabled", () => {
+  assert.equal(gate.enabled({ VERCEL: "1" }), true);
+  assert.equal(gate.enabled({ VERCEL: "1", PRISM_AUTH: "0" }), true);
+
+  const res = response();
+  assert.equal(gate.check(request("/", { accept: "text/html" }), res, { env: { VERCEL: "1" } }), false);
+  assert.match(res.body, /Under construction/i);
 });
 
 test("PRISM_AUTH=0 switches the gate off even with a secret set", (t) => {
@@ -159,11 +177,14 @@ test("downloads need a session or an install token", (t) => {
   );
 });
 
-test("downloads stay open when the gate is off", (t) => {
+test("downloads stay open on a local copy when the gate is off", (t) => {
   const previous = process.env.PRISM_AUTH_SECRET;
+  const previousVercel = process.env.VERCEL;
   delete process.env.PRISM_AUTH_SECRET;
+  delete process.env.VERCEL;
   t.after(() => {
     if (previous !== undefined) process.env.PRISM_AUTH_SECRET = previous;
+    if (previousVercel !== undefined) process.env.VERCEL = previousVercel;
   });
   assert.equal(gate.downloadAllowed(request("/download/mac")).ok, true);
 });

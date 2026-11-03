@@ -32,7 +32,7 @@ test("downloads are served by Prism itself, not by GitHub", () => {
 });
 
 test("the UI links to exactly those urls", () => {
-  const html = read("public", "index.html");
+  const html = read("private", "app.html");
   assert.ok(html.includes(`href="${DOWNLOADS.mac.url}"`), "index.html is missing the macOS link");
   assert.ok(html.includes(`href="${DOWNLOADS.windows.url}"`), "index.html is missing the Windows link");
 
@@ -135,6 +135,7 @@ test("the packaging script builds the asset names the links expect", () => {
   assert.match(script, /--deps/);
   assert.match(script, /--platform/);
   assert.match(script, /node_modules/);
+  assert.match(script, /^  private$/m, "bundles include the app shell outside the public website directory");
 });
 
 test("the release workflow publishes on tags and checks the bundles", () => {
