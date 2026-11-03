@@ -1,0 +1,170 @@
+"use strict";
+
+/**
+ * The hosted build has its own failure modes: rewrite rules that hand the
+ * function a destination path, query parameters that arrive merged or split,
+ * and deployments where the path rewrites simply never happen. These tests
+ * pin the adapter and the config down so a deploy cannot silently 404.
+ */
+
+const test = require("node:test");
+const assert = require("node:assert");
+const fs = require("fs");
+const path = require("path");
+const handler = require("../api/proxy");
+const { rebuildUrl } = handler;
+const { PROXY_MARKER_HEADER } = require("../lib/proxy");
+
+const ROOT = path.join(__dirname, "..");
+
+test("vercel.json routes every shape of request at the proxy", () => {
+  const config = JSON.parse(fs.readFileSync(path.join(ROOT, "vercel.json"), "utf8"));
+  const sources = config.rewrites.map((r) => r.source);
+
+  // api routes must short-circuit before the catch-all, or they would loop
+  assert.equal(sources[0], "/api/:path*");
+  assert.equal(config.rewrites[0].destination, "/api/:path*");
+
+  for (const source of ["/https/:path*", "/http/:path*", "/p/:path*", "/r/:path*"]) {
+    assert.ok(sources.includes(source), `missing rewrite for ${source}`);
+  }
+
+  // the safety net: anything else goes to the proxy with its path attached
+  const catchAll = config.rewrites[config.rewrites.length - 1];
+  assert.equal(catchAll.source, "/(.*)");
+  assert.equal(catchAll.destination, "/api/proxy?__path=$1");
+
+  // static shell is served from public/
+  assert.equal(config.outputDirectory, "public");
+  // and the proxy function gets room for slow upstreams
+  assert.equal(config.functions["api/proxy.js"].maxDuration, 60);
+});
+
+test("rebuildUrl turns a rewritten path back into a target url", () => {
+  assert.equal(
+    rebuildUrl("/api/proxy?__path=https/github.com/explore"),
+    "/https/github.com/explore"
+  );
+  assert.equal(
+    rebuildUrl("/api/proxy?__path=http%3A%2F%2Fexample.com%2Fa%2Fb"),
+    "/http://example.com/a/b"
+  );
+});
+
+test("rebuildUrl keeps the original query string, which arrives separately", () => {
+  // Vercel merges the incoming query with the destination query, so a search
+  // for "cats" must not be dropped on the floor.
+  assert.equal(
+    rebuildUrl("/api/proxy?__path=https/www.google.com/search&q=cats&hl=en"),
+    "/https/www.google.com/search?q=cats&hl=en"
+  );
+  assert.equal(
+    rebuildUrl("/api/proxy?__path=https/example.com/a%3Fb%3D1&c=2"),
+    "/https/example.com/a?b=1&c=2"
+  );
+});
+
+test("rebuildUrl leaves plain proxy requests alone", () => {
+  const direct = "/api/proxy?url=" + encodeURIComponent("https://example.com/");
+  assert.equal(rebuildUrl(direct), direct);
+  assert.equal(rebuildUrl("/api/proxy"), "/api/proxy");
+});
+
+function fakeRes() {
+  const res = {
+    statusCode: 200,
+    headers: {},
+    body: "",
+    setHeader(k, v) {
+      this.headers[k.toLowerCase()] = v;
+    },
+    getHeader(k) {
+      return this.headers[k.toLowerCase()];
+    },
+    status(code) {
+      this.statusCode = code;
+      return this;
+    },
+    end(body) {
+      this.body = body === undefined ? "" : String(body);
+      this.ended = true;
+    },
+    write(chunk) {
+      this.body += String(chunk);
+      return true;
+    },
+    on() {},
+    once() {},
+    emit() {},
+  };
+  return res;
+}
+
+function fakeReq(url, headers = {}) {
+  return {
+    method: "GET",
+    url,
+    headers: { host: "prism.vercel.app", "x-forwarded-proto": "https", ...headers },
+    socket: {},
+    [Symbol.asyncIterator]: async function* () {},
+  };
+}
+
+test("a request with no target answers with Prism's own page, not a bare 404", async (t) => {
+  const realFetch = global.fetch;
+  t.after(() => {
+    global.fetch = realFetch;
+  });
+  global.fetch = async () => {
+    throw new Error("no network expected");
+  };
+
+  const res = fakeRes();
+  await handler(fakeReq("/api/proxy"), res);
+
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.getHeader(PROXY_MARKER_HEADER), "1");
+  assert.match(res.body, /Prism proxy/);
+});
+
+test("the adapter proxies a rewritten request and reports query-mode urls", async (t) => {
+  const realFetch = global.fetch;
+  const seen = [];
+  t.after(() => {
+    global.fetch = realFetch;
+  });
+  global.fetch = async (url) => {
+    seen.push(url);
+    return new Response('<html><head></head><body><a href="/next">next</a></body></html>', {
+      status: 200,
+      headers: { "content-type": "text/html; charset=utf-8" },
+    });
+  };
+
+  const res = fakeRes();
+  await handler(fakeReq("/api/proxy?url=" + encodeURIComponent("https://example.com/start")), res);
+
+  assert.deepEqual(seen, ["https://example.com/start"]);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.getHeader(PROXY_MARKER_HEADER), "1");
+  // query mode keeps every link on the endpoint that definitely exists
+  assert.match(res.body, /href="\/api\/proxy\?url=https%3A%2F%2Fexample\.com%2Fnext"/);
+});
+
+test("the adapter keeps path mode for rewritten paths so assets resolve relatively", async (t) => {
+  const realFetch = global.fetch;
+  t.after(() => {
+    global.fetch = realFetch;
+  });
+  global.fetch = async () =>
+    new Response('<html><head></head><body><a href="/next">next</a><img src="pic.png"></body></html>', {
+      status: 200,
+      headers: { "content-type": "text/html" },
+    });
+
+  const res = fakeRes();
+  await handler(fakeReq("/api/proxy?__path=https/example.com/start"), res);
+
+  assert.match(res.body, /href="\/https\/example\.com\/next"/);
+  assert.match(res.body, /src="\/https\/example\.com\/pic\.png"/);
+});

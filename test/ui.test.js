@@ -77,7 +77,8 @@ function liveStatus(available) {
       };
 }
 
-function makeUi(available) {
+function makeUi(available, serverOptions = {}) {
+  const { pathRewrites = true, proxyEndpoint = true, hosted = false } = serverOptions;
   const dom = new JSDOM(html, {
     url: ORIGIN + "/",
     runScripts: "dangerously",
@@ -85,11 +86,27 @@ function makeUi(available) {
     beforeParse(window) {
       FakeWebSocket.instances = [];
       window.WebSocket = FakeWebSocket;
-      window.fetch = async (url) => {
-        if (String(url).includes("/live/status")) {
-          return { ok: true, json: async () => liveStatus(available) };
+      window.fetch = async (url, init) => {
+        const href = String(url);
+        if (href.includes("/live/status")) {
+          return {
+            ok: true,
+            headers: { get: () => null },
+            json: async () => ({ ...liveStatus(available), hosted }),
+          };
         }
-        return { ok: true, json: async () => ({}) };
+        // the transport probes
+        if (href.startsWith("/https/!invalid-host!/")) {
+          if (!pathRewrites) throw new Error("404 from host");
+          return { ok: false, headers: { get: (k) => (k.toLowerCase() === "x-prism-proxy" ? "1" : null) } };
+        }
+        if (href === "/api/proxy") {
+          if (!proxyEndpoint) {
+            return { ok: false, headers: { get: () => null } };
+          }
+          return { ok: false, headers: { get: (k) => (k.toLowerCase() === "x-prism-proxy" ? "1" : null) } };
+        }
+        return { ok: true, headers: { get: () => null }, json: async () => ({}) };
       };
       window.ResizeObserver = undefined;
     },
@@ -250,5 +267,141 @@ test("the engine pill pins an engine and remembers it", { skip: !JSDOM && "jsdom
   await tick();
   assert.equal(window.localStorage.getItem("prism:engine"), "proxy");
   assert.equal(window.document.getElementById("engine-label").textContent, "Proxy");
+  dom.window.close();
+});
+
+test("hosted deploy with dead path rewrites falls back to the rewrite-free endpoint", async () => {
+  if (!JSDOM) return;
+  const dom = makeUi(false, { hosted: true, pathRewrites: false, proxyEndpoint: true });
+  const { window } = dom;
+  await tick(60);
+
+  submit(window, "#start-q", "example.com");
+  await tick();
+
+  assert.equal(
+    window.document.getElementById("view").src,
+    `${ORIGIN}/api/proxy?url=${encodeURIComponent("https://example.com/")}`
+  );
+  assert.match(window.document.getElementById("engine-note").textContent, /Hosted copy/);
+  assert.equal(window.document.getElementById("banner").hidden, true);
+  dom.window.close();
+});
+
+test("working path rewrites are preferred even on a hosted deploy", async () => {
+  if (!JSDOM) return;
+  const dom = makeUi(false, { hosted: true, pathRewrites: true });
+  const { window } = dom;
+  await tick(60);
+
+  submit(window, "#start-q", "example.com");
+  await tick();
+  assert.equal(window.document.getElementById("view").src, `${ORIGIN}/https/example.com/`);
+  dom.window.close();
+});
+
+test("a deploy with no proxy at all says so instead of showing a blank page", async () => {
+  if (!JSDOM) return;
+  const dom = makeUi(false, { hosted: true, pathRewrites: false, proxyEndpoint: false });
+  const { window } = dom;
+  await tick(60);
+
+  const banner = window.document.getElementById("banner");
+  assert.equal(banner.hidden, false);
+  assert.match(window.document.getElementById("banner-text").textContent, /cannot proxy/);
+  assert.match(window.document.getElementById("engine-note").textContent, /not running its proxy/);
+  dom.window.close();
+});
+
+test("a Cloudflare-blocked page is escalated to Live mode automatically", async () => {
+  if (!JSDOM) return;
+  const dom = makeUi(true);
+  const { window } = dom;
+  await tick();
+
+  submit(window, "#url", "reddit.com");
+  await tick();
+  // auto mode sends reddit to live anyway; force proxy to model a site that
+  // only reveals its bot wall through the proxy
+  window.localStorage.setItem("prism:engine", "proxy");
+  window.document.getElementById("view").dispatchEvent(new window.Event("load"));
+  submit(window, "#url", "news.example.com");
+  await tick();
+  assert.match(window.document.getElementById("view").src, /\/https\/news\.example\.com\//);
+
+  window.postMessage(
+    { type: "prism-blocked", vendor: "Cloudflare", url: "https://news.example.com/" },
+    "*"
+  );
+  await tick();
+
+  // it switched to the live engine and said why
+  assert.match(window.document.getElementById("banner-text").textContent, /Cloudflare challenged this page/);
+  assert.equal(window.document.getElementById("engine-label").textContent, "Live");
+  // a live session is showing, and it is pointed at the blocked page — either a
+  // fresh socket or a nav command on the session that is already open
+  assert.equal(window.document.getElementById("live").hidden, false);
+  const liveSessions = FakeWebSocket.instances.filter((s) => s.url.includes("/live/ws"));
+  assert.ok(liveSessions.length >= 1, "expected a live session");
+  const pointedAtNews = liveSessions.some(
+    (s) =>
+      s.url.includes("news.example.com") ||
+      s.sent.some((m) => m.t === "nav" && m.url.includes("news.example.com"))
+  );
+  assert.ok(pointedAtNews, "the live session should be navigating to the blocked page");
+
+  // and it does not ping-pong: a second wall on the same url stays in live
+  const before = FakeWebSocket.instances.length;
+  window.postMessage(
+    { type: "prism-blocked", vendor: "Cloudflare", url: "https://news.example.com/" },
+    "*"
+  );
+  await tick();
+  assert.equal(FakeWebSocket.instances.length, before);
+  dom.window.close();
+});
+
+test("without Live mode a Cloudflare block explains how to get through", async () => {
+  if (!JSDOM) return;
+  const dom = makeUi(false, { hosted: true });
+  const { window } = dom;
+  await tick();
+
+  window.postMessage(
+    { type: "prism-blocked", vendor: "Cloudflare", url: "https://www.reddit.com/" },
+    "*"
+  );
+  await tick();
+
+  assert.match(
+    window.document.getElementById("banner-text").textContent,
+    /Cloudflare blocks the proxy engine/
+  );
+  assert.equal(window.document.getElementById("banner-action").textContent, "How?");
+
+  // the explanation tells them to run it locally
+  window.document.getElementById("banner-action").click();
+  await tick();
+  assert.equal(window.document.getElementById("live-overlay").hidden, false);
+  assert.match(window.document.getElementById("live-hint").textContent, /npm start/);
+  dom.window.close();
+});
+
+test("a live-mode challenge points at the checkbox instead of hanging", async () => {
+  if (!JSDOM) return;
+  const dom = makeUi(true);
+  const { window } = dom;
+  await tick();
+
+  submit(window, "#url", "twitch.tv");
+  await tick();
+  const socket = FakeWebSocket.instances.find((s) => s.url.includes("/live/ws"));
+  socket.dispatch("message", {
+    data: JSON.stringify({ t: "challenge", vendor: "Cloudflare", url: "https://twitch.tv/" }),
+  });
+  await tick();
+
+  assert.match(window.document.getElementById("banner-text").textContent, /checking this browser/);
+  assert.match(window.document.getElementById("banner-text").textContent, /click it/);
   dom.window.close();
 });

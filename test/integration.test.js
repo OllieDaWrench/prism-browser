@@ -52,6 +52,17 @@ function startOrigin() {
       });
       return;
     }
+    if (url.pathname === "/challenged") {
+      res.statusCode = 403;
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.setHeader("cf-mitigated", "challenge");
+      res.setHeader("cf-ray", "8a1b2c3d-SYD");
+      res.setHeader("Server", "cloudflare");
+      res.end(`<!DOCTYPE html><html><head><title>Just a moment...</title></head>
+        <body><h2>Checking your browser before accessing example.test</h2>
+        <script>window._cf_chl_opt={cvId:"3"};</script></body></html>`);
+      return;
+    }
     if (url.pathname === "/blob") {
       res.setHeader("Content-Type", "application/octet-stream");
       res.end(Buffer.alloc(1024, 3));
@@ -152,9 +163,52 @@ test("streams binary bodies untouched", async () => {
   assert.equal(buf[0], 3);
 });
 
+test("Explains a Cloudflare challenge instead of rendering it", async () => {
+  const res = await fetch(target + "/challenged");
+  // the wall itself is a failed fetch, but Prism answers with its own page so
+  // the user is not left staring at a dead "Just a moment..."
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get("x-prism-blocked"), "Cloudflare");
+  const html = await res.text();
+  assert.match(html, /Cloudflare bot protection/);
+  assert.match(html, /Live mode/);
+  assert.match(html, /prism-blocked/);
+  assert.doesNotMatch(html, /_cf_chl_opt/);
+});
+
 test("keeps upstream error status codes", async () => {
   const res = await fetch(target + "/missing");
   assert.equal(res.status, 404);
+});
+
+test("marks every proxy response so the UI can verify routing", async () => {
+  const res = await fetch(target + "/");
+  assert.equal(res.headers.get("x-prism-proxy"), "1");
+  const rejected = await fetch(prism + "/https/!invalid!/");
+  assert.equal(rejected.headers.get("x-prism-proxy"), "1");
+});
+
+test("serves the rewrite-free /api/proxy endpoint in query mode", async () => {
+  const res = await fetch(`${prism}/api/proxy?url=${encodeURIComponent(origin + "/")}`);
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get("x-prism-proxy"), "1");
+  const html = await res.text();
+  // every emitted url stays on the endpoint that needs no rewrite rules
+  assert.match(html, /href="\/api\/proxy\?url=http%3A%2F%2F127\.0\.0\.1%3A\d+%2Fnext"/);
+  assert.match(html, /src="\/api\/proxy\?url=http%3A%2F%2F127\.0\.0\.1%3A\d+%2Fpic\.png"/);
+});
+
+test("query mode redirects stay inside the endpoint", async () => {
+  const res = await fetch(`${prism}/api/proxy?url=${encodeURIComponent(origin + "/redir")}`, {
+    redirect: "manual",
+  });
+  assert.equal(res.status, 302);
+  assert.match(res.headers.get("location"), /^\/api\/proxy\?url=http%3A%2F%2F127\.0\.0\.1%3A\d+%2Fnext$/);
+});
+
+test("path mode redirects stay path mapped", async () => {
+  const res = await fetch(target + "/redir", { redirect: "manual" });
+  assert.match(res.headers.get("location"), /^\/http\/127\.0\.0\.1:\d+\/next$/);
 });
 
 test("supports the legacy query form and /p/ form", async () => {

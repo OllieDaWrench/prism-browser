@@ -42,8 +42,92 @@ If Live mode is unavailable the app says so and runs proxy-only. `GET /live/stat
 | `HOST` | `0.0.0.0` | Interface to bind |
 | `PRISM_CHROME` | auto-detected | Chromium/Chrome/Edge executable for Live mode |
 | `PRISM_NO_LIVE` | unset | Set to `1` to disable the live engine entirely |
+| `PRISM_HEADLESS` | unset | Set to `0` to run Live mode in a real window instead of headless |
 | `PRISM_ALLOW_PRIVATE` | unset | Set to `1` to allow proxying to private/local addresses |
 | `PRISM_UA` | a desktop Chrome UA | User agent sent upstream |
+
+## Deploying to Vercel (and why the hosted copy is proxy-only)
+
+`vercel.json` routes every shape of request at a single function:
+
+```
+/api/:path*                      -> identity, so functions short-circuit the catch-all
+/live/status                     -> /api/live
+/https/:path*                    -> /api/proxy?__path=https/:path*
+/http/:path*, /p/:path*, /r/:path*  -> same pattern
+/(.*)                            -> /api/proxy?__path=$1      (safety net)
+```
+
+A serverless rewrite hands the function its *destination* path, so the target
+travels in `__path`; `api/proxy.js` reassembles it **and re-appends the original
+query string**, which Vercel merges in separately (dropping it would silently
+break every search).
+
+Because a deployment's rewrite rules are outside this repository's control, the
+UI does not trust them. On boot it probes `/https/!invalid-host!/` and looks for
+the `x-prism-proxy` response header every proxy response carries:
+
+- **header present** → path mapping works, use `/https/<host>/<path>` (best:
+  relative URLs resolve natively).
+- **header missing** → fall back to query mode, where every URL Prism emits is
+  `/api/proxy?url=…`. That endpoint is a real function path, so it works with no
+  rewrite rules at all — the HTML rewriter, the injected shim, redirects and
+  form posts all switch to it together.
+- **neither answers** → Prism says so in the toolbar and a banner instead of
+  framing a 404 page.
+
+Two things the hosted copy can never do, by design:
+
+- **Live mode** needs a long-running process to hold Chromium and a websocket,
+  so `/live/status` reports it unavailable and the app stays on the proxy.
+- **Cookies** have no per-site path to live in during query mode, so they are
+  scoped to `/api/proxy` and may be shared between sites. Path mode (local, or a
+  host where rewrites work) keeps a separate bubble per site.
+
+If the deployment shows the host's own 404 (for example Vercel's dark
+"404 NOT_FOUND" page with a region id) rather than Prism's styled error page,
+then the request never reached Prism. Check that the project's **Root
+Directory** is the repository root and redeploy — `vercel.json` and `api/` are
+both at the top level.
+
+## Cloudflare and other bot walls
+
+This is the single biggest reason a "website won't load" in Prism, so it is handled explicitly.
+
+A proxy fetches pages **from a server**, and Cloudflare (plus DataDome, Imperva, PerimeterX, Akamai and
+friends) deliberately refuses requests that arrive that way. The typical response is a `403` with a
+"Just a moment…" / "Verify you are human" interstitial. Nothing about Prism is broken in that case —
+the site is doing exactly what it was configured to do — and a proxy can never pass it, because the
+challenge needs the site's own JavaScript running on its own origin with a human present.
+
+What Prism does instead (`lib/botwall.js`):
+
+1. **Recognises the wall** by status code, vendor-specific headers (`cf-mitigated`, `x-datadome`,
+   `x-iinfo`, …) and page signatures. Ordinary pages that merely *mention* Cloudflare are not flagged.
+2. **Never renders the dead interstitial.** It serves its own explanation instead, carrying the
+   `X-Prism-Blocked` header and a message to the UI.
+3. **Escalates to Live mode automatically** when a browser is available — the page is reopened in
+   your own Chrome, on your own network. You can then complete the challenge yourself; Prism tells
+   you to click the checkbox if one appears.
+4. **Explains the local escape hatch** when Live mode is not available (for example on the hosted
+   copy, where serverless cannot run a browser).
+
+The live engine gets out of the way as much as it can:
+
+- `--disable-blink-features=AutomationControlled`, a `navigator.webdriver` shim injected before any
+  page script runs, and a desktop Chrome user agent — so it does not advertise being automated.
+- It watches each page it lands on; if a challenge is on screen it tells the UI, which prompts you
+  to click the checkbox rather than leaving a blank frame.
+- `PRISM_HEADLESS=0 npm start` opens a **real window** instead of a headless one. Some interactive
+  challenge flows are happier in a visible browser.
+
+The proxy engine sends a self-consistent Chrome fingerprint (client hints matching its user agent,
+fetch metadata describing its own request) which gets past simple WAF rules, but that is a
+best-effort improvement — a genuine challenge is a hard wall for any proxy.
+
+**Bottom line:** if a site is Cloudflare-protected, use Live mode, and run Prism locally so the
+request comes from your own IP with your own browser. On a datacenter-hosted copy (Vercel) those
+sites will keep challenging, because the traffic is not yours.
 
 ## How the proxy engine works
 
@@ -102,6 +186,7 @@ expects to, which is why JavaScript-heavy sites finally work.
 | --- | --- |
 | `/` | Prism UI |
 | `/https/<host>/<path>`, `/http/<host>/<path>` | Proxy engine page/asset mapping |
+| `/api/proxy?url=…` | Rewrite-free endpoint used by hosted deploys (query mode) |
 | `/proxy?url=…`, `/p/<base64url>` | Older query-style entry points, still supported |
 | `/ws/<scheme>/<host>/<path>` | WebSocket tunnel for proxied pages |
 | `/live/status` | Live engine availability, browser name and reason |
@@ -118,6 +203,11 @@ npm test
 `test/shim.test.js` runs the injected shim against a fake DOM.
 `test/integration.test.js` boots the real server against a throwaway origin and checks rewriting,
 cookie scoping, redirects, POSTs, binary streaming, error codes and WebSocket tunnelling.
+`test/botwall.test.js` covers bot-wall detection (Cloudflare challenges, blocks, Turnstile, other
+vendors, and false positives on ordinary pages) plus the in-page probe the live engine uses.
+`test/vercel.test.js` covers the hosted build: the rewrite config, reassembling
+`__path` with its merged query string, and both URL modes end to end through the
+Vercel adapter.
 `test/live.test.js` drives a scripted mock browser over CDP to verify sessions, screencast frames,
 navigation reporting and input translation on machines with no Chromium.
 `test/ui.test.js` loads the real UI in jsdom and checks engine choice, navigation, the live stream and
@@ -140,16 +230,12 @@ npm i --no-save jsdom && npm test
 
 ```
 server.js            http server, routes, websocket upgrade handling
-lib/proxy.js         path-mapped proxy engine
+lib/proxy.js         proxy engine: path mapping, query mode, rewriting, cookies
 lib/shim.js          script injected into proxied pages
 lib/live.js          DevTools-Protocol browser engine
 lib/ws.js            dependency-free websocket server + tunnel codec
 public/              the browser UI (index.html, app.js, styles.css)
-api/                 Vercel adapters (proxy only; live needs a long-running process)
-test/                unit + integration + mock-CDP tests
+api/proxy.js         Vercel adapter: rebuilds __path + merged query, picks a mode
+api/live.js          Vercel adapter: live engine is unavailable when hosted
+test/                unit, integration, mock-CDP, Vercel and UI (jsdom) tests
 ```
-
-## Deploying to Vercel
-
-`vercel.json` and `api/` are wired for the proxy engine only. Serverless has no long-lived process,
-so `/live/status` reports Live mode unavailable and the UI falls back to proxy mode automatically.

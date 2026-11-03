@@ -23,17 +23,17 @@ app.use(express.static(path.join(__dirname, "public"), { extensions: ["html"] })
 app.get("/live/status", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (browser.state === "idle" || browser.state === "starting") await browser.start();
-  res.json(browser.status());
+  res.json({ ...browser.status(), hosted: false, proxyMode: "path" });
 });
 
 app.post("/live/warm", async (req, res) => {
   if (browser.state === "idle") browser.start();
-  res.json(browser.status());
+  res.json({ ...browser.status(), hosted: false, proxyMode: "path" });
 });
 
 /* ---------------- proxy engine ---------------- */
 
-const proxyRoute = ["/proxy", "/https/*", "/http/*", "/p/*", "/r/*", "/r"];
+const proxyRoute = ["/proxy", "/api/proxy", "/https/*", "/http/*", "/p/*", "/r/*", "/r"];
 
 app.all(proxyRoute, (req, res) => {
   const started = Date.now();

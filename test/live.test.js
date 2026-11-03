@@ -14,7 +14,7 @@ const { upgrade } = require("../lib/ws");
 const { Cdp, LiveSession } = require("../lib/live");
 
 function startMockBrowser() {
-  const seen = { commands: [], input: [] };
+  const seen = { commands: [], input: [], challenge: "" };
   const server = http.createServer((req, res) => res.end("mock"));
   server.on("upgrade", (req, socket, head) => {
     upgrade(req, socket, head, (conn) => {
@@ -28,6 +28,11 @@ function startMockBrowser() {
         const event = (name, p) => send(name, p, sessionId);
 
         switch (method) {
+          case "Runtime.evaluate":
+            return reply({ result: { type: "string", value: seen.challenge || "" } });
+          case "Page.addScriptToEvaluateOnNewDocument":
+            seen.stealth = params.source;
+            return reply({ identifier: "stealth" });
           case "Browser.getVersion":
             return reply({ product: "Chrome/131.0.0.0" });
           case "Target.createTarget":
@@ -159,6 +164,40 @@ test("live session refuses non-http navigation", async () => {
 
   await session.onMessage({ t: "nav", url: "example.org" });
   assert.ok(mock.seen.commands.includes("Page.navigate"));
+
+  await session.close();
+  ws.close();
+  mock.server.close();
+});
+
+test("the live engine spots a bot challenge and tells the user", async () => {
+  const mock = await startMockBrowser();
+  const ws = await openWs(mock.url);
+  const cdp = new Cdp(ws);
+
+  const messages = [];
+  const session = new LiveSession({ send: (m) => messages.push(m), close() {}, onJSON() {}, on() {} }, "");
+  await session.start({ cdp });
+
+  // a stealth patch is installed before any page script runs
+  assert.match(mock.seen.stealth, /webdriver/);
+
+  mock.seen.challenge = "Cloudflare";
+  await session.onMessage({ t: "nav", url: "https://example.com/" });
+  await new Promise((r) => setTimeout(r, 120));
+
+  const challenge = messages.find((m) => m.t === "challenge");
+  assert.ok(challenge, "expected a challenge notification");
+  assert.equal(challenge.vendor, "Cloudflare");
+
+  // it is reported once, not on every load event
+  const count = messages.filter((m) => m.t === "challenge").length;
+  assert.equal(count, 1);
+
+  // and it clears when the challenge is gone
+  mock.seen.challenge = "";
+  await session.checkForChallenge();
+  assert.equal(session.challengeFor, null);
 
   await session.close();
   ws.close();
