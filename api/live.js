@@ -8,7 +8,7 @@
 const gate = require("../lib/gate");
 
 module.exports = function handler(req, res) {
-  if (!gate.check(req, res)) return;
+  if (!gate.check(req, res, { adminOnly: true })) return;
   res.setHeader("Content-Type", "application/json");
   res.setHeader("Cache-Control", "no-store");
   res.end(

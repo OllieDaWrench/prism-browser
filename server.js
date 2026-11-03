@@ -15,6 +15,7 @@ const auth = require("./lib/auth");
 const users = require("./lib/users");
 const gate = require("./lib/gate");
 const { readBody } = require("./lib/body");
+const feedbackHandler = require("./api/feedback");
 
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || "0.0.0.0";
@@ -25,15 +26,37 @@ const browser = new LiveBrowser();
 
 app.disable("x-powered-by");
 
-/* Optional sign-in for the app itself (PRISM_AUTH=1). Off by default: this is
- * your own machine. The account endpoints stay reachable either way, so /admin
- * works without turning the gate on. */
+/* Optional sign-in for local copies (PRISM_AUTH=1). The home page and feedback
+ * remain public; the browser, proxy and Live engine require an administrator
+ * session whenever the local gate is enabled. */
 app.use((req, res, next) => {
   if (!gate.enabled()) return next();
   const route = String(req.path || "/");
-  if (route.startsWith("/api/") || route.startsWith("/live/") || route === "/healthz") return next();
+  const protectedBrowserRoute =
+    route === "/app" ||
+    route === "/proxy" ||
+    route === "/api/proxy" ||
+    route === "/r" ||
+    route === "/open" ||
+    route.startsWith("/https/") ||
+    route.startsWith("/http/") ||
+    route.startsWith("/p/") ||
+    route.startsWith("/r/") ||
+    route.startsWith("/live/");
+
+  if (protectedBrowserRoute) {
+    const session = gate.sessionFrom(req);
+    if (session && session.role === "admin") return next();
+    if (route === "/app" && String(req.headers.accept || "").includes("text/html")) {
+      return res.sendFile(path.join(__dirname, "private", "web-under-construction.html"));
+    }
+    return res.status(session ? 403 : 401).json({ ok: false, error: "The Prism browser is available to administrators." });
+  }
+
+  if (route === "/" || route === "/index.html" || route === "/healthz") return next();
+  if (route.startsWith("/api/")) return next();
   if (["/login", "/admin", "/gate.html", "/favicon.svg", "/install.sh", "/install"].includes(route)) return next();
-  if (/^\/(download|open)(\/|$)/.test(route)) return next();
+  if (/^\/download(\/|$)/.test(route)) return next();
   if (gate.sessionFrom(req)) return next();
   if (String(req.headers.accept || "").includes("text/html")) return res.redirect(302, "/login");
   return res.status(401).json({ ok: false, error: "Sign in first." });
@@ -58,9 +81,13 @@ app.get("/login", (req, res) => {
 });
 
 app.get("/admin", (req, res) => {
-  if (gate.enabled() && !gate.sessionFrom(req)) return res.redirect(302, "/login");
+  const session = gate.sessionFrom(req);
+  if (gate.enabled() && !session) return res.redirect(302, "/login");
+  if (gate.enabled() && session.role !== "admin") return res.redirect(302, "/app");
   res.sendFile(path.join(__dirname, "public", "admin.html"));
 });
+
+app.post("/api/feedback", feedbackHandler);
 
 app.get("/api/auth/status", async (req, res) => {
   const session = gate.sessionFrom(req);
@@ -113,6 +140,7 @@ app.post("/api/auth/token", async (req, res) => {
 app.get("/api/auth/users", async (req, res) => {
   const session = gate.sessionFrom(req);
   if (!session) return res.status(401).json({ ok: false, error: "Please sign in first." });
+  if (session.role !== "admin") return res.status(403).json({ ok: false, error: "Only administrators can view account management." });
 
   const list = await users.listUsers();
   res.setHeader("Cache-Control", "no-store");
@@ -240,10 +268,16 @@ app.get("/healthz", (req, res) =>
 );
 
 /**
- * Local copies still open the full app without sign-in. On Vercel the public
- * root is the invitation page and /app is routed through api/auth/home.js.
+ * The public homepage is served from public/index.html. The browser shell is a
+ * separate route: local copies stay open when auth is off, and gated copies
+ * admit administrators only.
  */
-app.get(["/", "/app", "/index.html"], (req, res) => {
+app.get("/app", (req, res) => {
+  const session = gate.sessionFrom(req);
+  if (gate.enabled() && (!session || session.role !== "admin")) {
+    return res.sendFile(path.join(__dirname, "private", "web-under-construction.html"));
+  }
+  res.setHeader("Cache-Control", "no-store");
   res.sendFile(path.join(__dirname, "private", "app.html"));
 });
 
@@ -299,6 +333,14 @@ app.use((req, res) => {
 
 server.on("upgrade", async (req, socket, head) => {
   const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+  if (gate.enabled()) {
+    const session = gate.sessionFrom(req);
+    if (!session || session.role !== "admin") {
+      socket.write("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
+      socket.destroy();
+      return;
+    }
+  }
 
   if (url.pathname === "/live/ws") {
     const initial = url.searchParams.get("url") || "";

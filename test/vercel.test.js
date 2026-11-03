@@ -23,23 +23,29 @@ test("vercel.json routes every shape of request at the proxy", () => {
   const config = JSON.parse(fs.readFileSync(path.join(ROOT, "vercel.json"), "utf8"));
   const sources = config.rewrites.map((r) => r.source);
 
-  // The app shell lives outside public/ and can only be fetched through the
-  // gate; public/index.html is the static sign-in page.
+  // The browser shell lives outside public/ and /app is handled by an
+  // administrator-only function; the homepage remains public.
   assert.equal(sources[0], "/app");
   assert.equal(config.rewrites[0].destination, "/api/auth/home");
   const publicHome = fs.readFileSync(path.join(ROOT, "public", "index.html"), "utf8");
   const signInPage = fs.readFileSync(path.join(ROOT, "public", "gate.html"), "utf8");
   const privateApp = fs.readFileSync(path.join(ROOT, "private", "app.html"), "utf8");
-  assert.equal(publicHome, signInPage, "the static homepage stays in sync with /login");
-  assert.match(publicHome, /Six-digit number/);
-  assert.doesNotMatch(publicHome, /Browse through Prism/);
+  assert.notEqual(publicHome, signInPage, "the public homepage is separate from admin sign-in");
+  assert.match(publicHome, /Web Browser/);
+  assert.match(publicHome, /Apps/);
+  assert.match(publicHome, /Games/);
+  assert.match(publicHome, /disabled/);
+  assert.match(publicHome, /Feedback/);
+  assert.match(publicHome, /Admin sign-in/);
+  assert.doesNotMatch(publicHome, /Six-digit number/);
   assert.match(privateApp, /Browse through Prism/);
+  assert.match(fs.readFileSync(path.join(ROOT, "private", "web-under-construction.html"), "utf8"), /Under construction/);
   assert.equal(fs.existsSync(path.join(ROOT, "public", "app.html")), false, "the app shell is not a public static file");
 
   // api routes must short-circuit before the catch-all, or they would loop
   assert.equal(sources[1], "/api/:path*");
   assert.equal(config.rewrites[1].destination, "/api/:path*");
-  assert.match(config.functions["api/auth/home.js"].includeFiles, /private\/app\.html/);
+  assert.match(config.functions["api/auth/home.js"].includeFiles, /private\/\*\.html/);
 
   for (const source of ["/https/:path*", "/http/:path*", "/p/:path*", "/r/:path*"]) {
     assert.ok(sources.includes(source), `missing rewrite for ${source}`);
@@ -126,7 +132,7 @@ function fakeReq(url, headers = {}) {
   };
 }
 
-test("the private app route serves login to anonymous visitors and the app to a signed-in visitor", (t) => {
+test("the hosted browser route shows under construction unless the visitor is an admin", (t) => {
   const oldSecret = process.env.PRISM_AUTH_SECRET;
   const oldAuth = process.env.PRISM_AUTH;
   process.env.PRISM_AUTH_SECRET = "a-test-secret-long-enough";
@@ -142,18 +148,24 @@ test("the private app route serves login to anonymous visitors and the app to a 
   home(fakeReq("/"), anonymous);
   assert.equal(anonymous.statusCode, 200);
   assert.match(anonymous.body, /Under construction/);
-  assert.match(anonymous.body, /Six-digit number/);
+  assert.doesNotMatch(anonymous.body, /Six-digit number/);
   assert.doesNotMatch(anonymous.body, /Browse through Prism/);
 
-  const session = auth.createSession({ number: "482913", role: "user" });
-  const signedIn = fakeRes();
-  home(fakeReq("/", { cookie: `prism_session=${session}` }), signedIn);
-  assert.equal(signedIn.statusCode, 200);
-  assert.match(signedIn.body, /Browse through Prism/);
-  assert.doesNotMatch(signedIn.body, /Under construction/);
+  const userSession = auth.createSession({ number: "482913", role: "user" });
+  const signedInUser = fakeRes();
+  home(fakeReq("/", { cookie: `prism_session=${userSession}` }), signedInUser);
+  assert.match(signedInUser.body, /Under construction/);
+  assert.doesNotMatch(signedInUser.body, /Browse through Prism/);
+
+  const adminSession = auth.createSession({ number: "111222", role: "admin" });
+  const admin = fakeRes();
+  home(fakeReq("/", { cookie: `prism_session=${adminSession}` }), admin);
+  assert.equal(admin.statusCode, 200);
+  assert.match(admin.body, /Browse through Prism/);
+  assert.doesNotMatch(admin.body, /Under construction/);
 });
 
-test("an ungated local copy still serves the app from root", (t) => {
+test("an ungated /app route still serves the local browser", (t) => {
   const oldSecret = process.env.PRISM_AUTH_SECRET;
   const oldAuth = process.env.PRISM_AUTH;
   delete process.env.PRISM_AUTH_SECRET;

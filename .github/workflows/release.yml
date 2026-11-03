@@ -127,8 +127,9 @@ jobs:
           done
 
           curl -fsS http://127.0.0.1:3999/healthz | grep -q '"prism":true'
-          curl -fsS http://127.0.0.1:3999/ | grep -q 'id="omnibox"'
-          curl -fsS http://127.0.0.1:3999/ | grep -q 'href="/download/mac"'
+          curl -fsS http://127.0.0.1:3999/ | grep -q 'Web Browser'
+          curl -fsS http://127.0.0.1:3999/app | grep -q 'id="omnibox"'
+          curl -fsS http://127.0.0.1:3999/app | grep -q 'href="/download/mac"'
 
           # /download/mac must save a zip, never navigate anywhere
           curl -fsS -D /tmp/headers -o /tmp/download.zip http://127.0.0.1:3999/download/mac
@@ -167,7 +168,7 @@ jobs:
             curl -fsSL https://prism-browser.vercel.app/install.sh | bash
             ```
 
-            After the v2.9.7 install, check the version or update from Terminal
+            After the v3.0.0 install, check the version or update from Terminal
             (close Prism first; the update keeps the Node runtime and browser profile):
 
             ```

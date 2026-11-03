@@ -10,3 +10,4 @@ dist/
 
 # accounts, when they are kept in a file instead of Vercel Blob
 data/users.json
+data/feedback.jsonl

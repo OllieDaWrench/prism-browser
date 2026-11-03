@@ -102,12 +102,77 @@ test.after(async () => {
   await new Promise((resolve) => server.close(resolve));
 });
 
-test("serves the app shell", async () => {
-  const res = await fetch(prism + "/");
+test("serves the public homepage and keeps the browser shell on /app", async () => {
+  const home = await fetch(prism + "/");
+  assert.equal(home.status, 200);
+  const landing = await home.text();
+  assert.match(landing, /Web Browser/);
+  assert.match(landing, /Apps/);
+  assert.match(landing, /Games/);
+  assert.match(landing, /Feedback/);
+  assert.doesNotMatch(landing, /id="omnibox"/);
+
+  const app = await fetch(prism + "/app");
+  assert.equal(app.status, 200);
+  const shell = await app.text();
+  assert.match(shell, /id="omnibox"/);
+  assert.match(shell, /live/);
+});
+
+test("local feedback submissions are written to the configured feedback file", async (t) => {
+  const fs = require("fs");
+  const os = require("os");
+  const path = require("path");
+  const previousFile = process.env.PRISM_FEEDBACK_FILE;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "prism-feedback-server-"));
+  const file = path.join(dir, "feedback.jsonl");
+  process.env.PRISM_FEEDBACK_FILE = file;
+  t.after(() => {
+    if (previousFile === undefined) delete process.env.PRISM_FEEDBACK_FILE;
+    else process.env.PRISM_FEEDBACK_FILE = previousFile;
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  const res = await fetch(prism + "/api/feedback", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message: "A private integration note" }),
+  });
+  const body = await res.json();
   assert.equal(res.status, 200);
-  const html = await res.text();
-  assert.match(html, /id="omnibox"/);
-  assert.match(html, /live/);
+  assert.equal(body.ok, true);
+  assert.doesNotMatch(JSON.stringify(body), /private integration note/i);
+  const entry = JSON.parse(fs.readFileSync(file, "utf8").trim());
+  assert.equal(entry.message, "A private integration note");
+  assert.ok(entry.createdAt);
+});
+
+test("a gated local browser is under construction for non-admins but available to admins", async (t) => {
+  const auth = require("../lib/auth");
+  const previousSecret = process.env.PRISM_AUTH_SECRET;
+  const previousAuth = process.env.PRISM_AUTH;
+  process.env.PRISM_AUTH_SECRET = "integration-admin-test-secret";
+  process.env.PRISM_AUTH = "1";
+  t.after(() => {
+    if (previousSecret === undefined) delete process.env.PRISM_AUTH_SECRET;
+    else process.env.PRISM_AUTH_SECRET = previousSecret;
+    if (previousAuth === undefined) delete process.env.PRISM_AUTH;
+    else process.env.PRISM_AUTH = previousAuth;
+  });
+
+  const publicHome = await fetch(prism + "/");
+  assert.match(await publicHome.text(), /Web Browser/);
+
+  const anonymous = await fetch(prism + "/app", { headers: { Accept: "text/html" } });
+  assert.match(await anonymous.text(), /Under construction/);
+
+  const userCookie = `prism_session=${auth.createSession({ number: "482913", role: "user" })}`;
+  const user = await fetch(prism + "/app", { headers: { Cookie: userCookie, Accept: "text/html" } });
+  assert.match(await user.text(), /Under construction/);
+
+  const adminCookie = `prism_session=${auth.createSession({ number: "111222", role: "admin" })}`;
+  const admin = await fetch(prism + "/app", { headers: { Cookie: adminCookie, Accept: "text/html" } });
+  assert.match(await admin.text(), /id="omnibox"/);
 });
 
 test("rewrites a page and strips framing policy", async () => {
@@ -305,8 +370,8 @@ test("download links are same-origin and stream a file", async () => {
   if (madeDir) fs.rmSync(LOCAL_DIR, { recursive: true, force: true });
 });
 
-test("the served app points download buttons at /download", async () => {
-  const html = await (await fetch(prism + "/")).text();
+test("the browser shell points download buttons at /download", async () => {
+  const html = await (await fetch(prism + "/app")).text();
   assert.match(html, /href="\/download\/mac"/);
   assert.match(html, /href="\/download\/windows"/);
   assert.doesNotMatch(html, /href="https:\/\/github\.com\/[^"]*releases/);
@@ -327,8 +392,8 @@ test("the macOS one-liner is served by the app itself", async () => {
   assert.doesNotMatch(body, /\bsudo\b/);
 });
 
-test("the download card offers the warning-free install for Macs", async () => {
-  const html = await (await fetch(prism + "/")).text();
+test("the browser shell offers the warning-free install for Macs", async () => {
+  const html = await (await fetch(prism + "/app")).text();
   assert.match(html, /id="install-cmd"/);
   assert.match(html, /\/install\.sh \| bash/);
   assert.match(html, /copy-install/);

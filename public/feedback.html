@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Prism — Feedback</title>
+    <style>
+      :root { color-scheme: dark; --gold: #e2b657; --ink: #0d0d0f; --panel: #18191e; --line: #343039; --muted: #a6a1a9; }
+      * { box-sizing: border-box; }
+      body { min-height: 100vh; margin: 0; display: grid; place-items: center; padding: 24px; background: radial-gradient(850px 550px at 50% -10%, #322714, var(--ink) 74%); color: #f4f0e8; font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      main { width: min(100%, 580px); padding: clamp(22px, 5vw, 34px); border: 1px solid var(--line); border-radius: 20px; background: var(--panel); }
+      .badge { color: var(--gold); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; }
+      h1 { margin: 8px 0 4px; font-size: 34px; }
+      .muted { margin: 0 0 22px; color: var(--muted); }
+      label { display: block; margin: 0 0 8px; font-size: 14px; }
+      textarea { width: 100%; min-height: 170px; resize: vertical; padding: 13px; border: 1px solid #4b4650; border-radius: 12px; background: #101014; color: #f4f0e8; font: inherit; }
+      textarea:focus { outline: 2px solid #8a6e34; border-color: var(--gold); }
+      button { margin-top: 14px; padding: 11px 18px; border: 0; border-radius: 10px; background: var(--gold); color: #201a0c; font: inherit; font-weight: 700; cursor: pointer; }
+      button:disabled { opacity: .55; cursor: wait; }
+      .status { min-height: 1.5em; margin: 12px 0 0; color: var(--muted); }
+      .status[data-kind="error"] { color: #f0aaa8; }
+      .status[data-kind="success"] { color: #9bd5a6; }
+      .privacy { margin: 12px 0 18px; color: #8e8992; font-size: 12px; }
+      a { color: var(--gold); }
+      .trap { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <span class="badge">Prism</span>
+      <h1>Feedback</h1>
+      <p class="muted">Tell us what’s working or what you’d like to see next.</p>
+      <form id="feedback-form">
+        <label for="message">Your message</label>
+        <textarea id="message" name="message" maxlength="2000" required placeholder="Write your feedback…"></textarea>
+        <label class="trap" aria-hidden="true">Leave this field empty<input name="website" tabindex="-1" autocomplete="off" /></label>
+        <p class="privacy">Please don’t include passwords or other sensitive information. Messages are stored privately for the Prism team.</p>
+        <button id="send" type="submit">Send feedback</button>
+        <p class="status" id="status" role="status" aria-live="polite"></p>
+      </form>
+      <a href="/">Back to home</a>
+    </main>
+    <script>
+      (function () {
+        var form = document.getElementById("feedback-form");
+        var send = document.getElementById("send");
+        var status = document.getElementById("status");
+        form.addEventListener("submit", function (event) {
+          event.preventDefault();
+          send.disabled = true;
+          status.dataset.kind = "";
+          status.textContent = "Sending…";
+          fetch("/api/feedback", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              message: document.getElementById("message").value,
+              website: form.elements.website.value
+            })
+          }).then(function (response) {
+            return response.json().then(function (body) { return { ok: response.ok, body: body }; });
+          }).then(function (result) {
+            if (!result.ok) throw new Error(result.body.error || "Feedback could not be sent.");
+            form.reset();
+            status.dataset.kind = "success";
+            status.textContent = "Thanks — your feedback was sent.";
+          }).catch(function (error) {
+            status.dataset.kind = "error";
+            status.textContent = error.message || "Could not reach Prism. Try again later.";
+          }).then(function () {
+            send.disabled = false;
+          });
+        });
+      })();
+    </script>
+  </body>
+</html>

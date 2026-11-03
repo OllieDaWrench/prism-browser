@@ -19,6 +19,7 @@ function json(res, status, body) {
 module.exports = async function handler(req, res) {
   const session = gate.sessionFrom(req);
   if (!session) return json(res, 401, { ok: false, error: "Please sign in first." });
+  if (session.role !== "admin") return json(res, 403, { ok: false, error: "Only administrators can view account management." });
 
   if ((req.method || "GET") === "GET") {
     let list = [];

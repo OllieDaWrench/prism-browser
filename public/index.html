@@ -3,141 +3,92 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="robots" content="noindex" />
-    <title>Prism — under construction</title>
+    <meta name="description" content="Prism — a new home for browser tools, apps, games and feedback." />
+    <title>Prism — Home</title>
     <style>
-      :root { --gold: #e2b657; --ink: #0d0d0f; --panel: #17171b; --line: rgba(226, 182, 87, 0.18); --muted: #9a958c; }
+      :root {
+        color-scheme: dark;
+        --gold: #e2b657;
+        --ink: #0d0d0f;
+        --panel: rgba(24, 25, 30, 0.92);
+        --line: #343039;
+        --muted: #a6a1a9;
+      }
       * { box-sizing: border-box; }
       body {
-        margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px;
-        background: radial-gradient(900px 600px at 50% -10%, #241f14 0%, var(--ink) 60%);
-        color: #f3efe6; font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        min-height: 100vh;
+        margin: 0;
+        display: grid;
+        place-items: center;
+        padding: 28px 18px;
+        color: #f4f0e8;
+        background: radial-gradient(900px 620px at 50% -12%, #322714 0%, #151418 48%, var(--ink) 80%);
+        font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       }
-      .wrap { width: 100%; max-width: 420px; }
-      .badge {
-        display: inline-block; margin-bottom: 18px; padding: 5px 12px; border-radius: 999px;
-        border: 1px solid var(--line); background: rgba(226, 182, 87, 0.08);
-        color: var(--gold); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+      .home { width: min(100%, 760px); }
+      header { margin-bottom: 30px; text-align: center; }
+      .mark {
+        width: 54px; height: 54px; display: grid; place-items: center; margin: 0 auto 14px;
+        border: 1px solid #725d31; border-radius: 17px; background: #201b12;
+        color: var(--gold); font-size: 27px; font-weight: 750; box-shadow: 0 12px 45px #0007;
       }
-      h1 { margin: 0 0 8px; font-size: 30px; letter-spacing: -0.02em; }
-      .lede { margin: 0 0 22px; color: var(--muted); }
-      .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 20px; }
-      h2 { margin: 0 0 4px; font-size: 16px; }
-      .hint { margin: 0 0 16px; color: var(--muted); font-size: 13px; }
-      label { display: block; margin: 0 0 5px; font-size: 12px; color: var(--muted); letter-spacing: 0.02em; }
-      input {
-        width: 100%; margin-bottom: 14px; padding: 11px 12px; border-radius: 10px;
-        border: 1px solid rgba(255, 255, 255, 0.12); background: #101014; color: #f3efe6;
-        font-size: 16px; letter-spacing: 0.08em;
+      h1 { margin: 0; font-size: clamp(36px, 8vw, 54px); letter-spacing: -0.045em; }
+      .tagline { margin: 8px 0 0; color: var(--muted); }
+      .tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+      .tile {
+        min-height: 142px; display: flex; flex-direction: column; justify-content: space-between;
+        padding: 20px; border: 1px solid var(--line); border-radius: 17px;
+        background: var(--panel); color: inherit; text-align: left; text-decoration: none;
+        font: inherit; cursor: pointer;
+        transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
       }
-      input:focus { outline: 2px solid rgba(226, 182, 87, 0.45); outline-offset: 1px; border-color: var(--gold); }
-      button {
-        width: 100%; padding: 12px; border: 0; border-radius: 10px; cursor: pointer;
-        background: var(--gold); color: #201a0c; font-size: 15px; font-weight: 600;
+      a.tile:hover, a.tile:focus-visible { transform: translateY(-2px); border-color: var(--gold); background: #211e1a; outline: none; }
+      .tile[aria-disabled="true"], .tile:disabled { color: #77747a; background: #141418; cursor: not-allowed; }
+      button.tile { appearance: none; }
+      button.tile:disabled { opacity: 1; }
+      .icon { color: var(--gold); font-size: 25px; line-height: 1; }
+      [aria-disabled="true"] .icon { color: #77747a; }
+      .tile-title { display: block; margin-top: 17px; font-size: 18px; font-weight: 680; }
+      .tile-note { display: block; margin-top: 3px; color: var(--muted); font-size: 13px; }
+      [aria-disabled="true"] .tile-note { color: #77747a; }
+      footer { margin-top: 24px; color: #817d85; font-size: 12px; text-align: center; }
+      footer a { color: #aaa5ad; }
+      @media (max-width: 520px) {
+        .tiles { grid-template-columns: 1fr; gap: 10px; }
+        .tile { min-height: 106px; padding: 17px; }
+        .tile-title { margin-top: 12px; }
       }
-      button:disabled { opacity: 0.6; cursor: default; }
-      .error { margin: 0 0 14px; padding: 10px 12px; border-radius: 10px; font-size: 13px;
-        background: rgba(226, 84, 84, 0.1); border: 1px solid rgba(226, 84, 84, 0.35); color: #f0b4b4; }
-      .error[hidden] { display: none; }
-      .setup { margin: 0 0 14px; padding: 11px 12px; border-radius: 10px; font-size: 12.5px; line-height: 1.6;
-        background: rgba(226, 182, 87, 0.08); border: 1px solid rgba(226, 182, 87, 0.3); color: #d8c9a4; }
-      .setup[hidden] { display: none; }
-      code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background: rgba(255,255,255,0.08);
-        padding: 1px 5px; border-radius: 5px; font-size: 12px; }
-      .foot { margin: 18px 0 0; color: var(--muted); font-size: 12px; text-align: center; line-height: 1.7; }
+      @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0.01ms !important; } }
     </style>
   </head>
   <body>
-    <div class="wrap">
-      <span class="badge">Under construction</span>
-      <h1>Prism</h1>
-      <p class="lede">
-        I'm still building it. If you've been given a six-digit number and a password, sign in below —
-        otherwise check back later.
-      </p>
+    <main class="home">
+      <header>
+        <div class="mark" aria-hidden="true">P</div>
+        <h1>Prism</h1>
+        <p class="tagline">Choose where you want to go.</p>
+      </header>
 
-      <div class="card">
-        <h2>Sign in</h2>
-        <p class="hint">Use the six-digit number and password you were given.</p>
-        <div class="setup" id="setup" hidden>
-          No accounts exist yet. Set <code>PRISM_AUTH_SECRET</code>, connect Vercel Blob, and add the first
-          manager with a <code>PRISM_USERS</code> starting list. Then sign in here to manage accounts.
-        </div>
-        <p class="error" id="error" hidden></p>
-        <form id="login">
-          <label for="number">Six-digit number</label>
-          <input id="number" name="number" inputmode="numeric" autocomplete="username"
-                 pattern="[0-9]{6}" maxlength="7" placeholder="482913" required autofocus />
-          <label for="password">Password</label>
-          <input id="password" name="password" type="password" autocomplete="current-password" required />
-          <button type="submit" id="submit">Sign in</button>
-        </form>
-      </div>
+      <nav class="tiles" aria-label="Prism sections">
+        <a class="tile" href="/app">
+          <span class="icon" aria-hidden="true">◉</span>
+          <span><span class="tile-title">Web Browser</span><span class="tile-note">Open the Prism browser</span></span>
+        </a>
+        <a class="tile" href="/apps.html">
+          <span class="icon" aria-hidden="true">▦</span>
+          <span><span class="tile-title">Apps</span><span class="tile-note">Explore apps in Prism</span></span>
+        </a>
+        <button class="tile" type="button" disabled aria-disabled="true" title="Games are not available yet">
+          <span class="icon" aria-hidden="true">▶</span>
+          <span><span class="tile-title">Games</span><span class="tile-note">Coming later</span></span>
+        </button>
+        <a class="tile" href="/feedback.html">
+          <span class="icon" aria-hidden="true">✉</span>
+          <span><span class="tile-title">Feedback</span><span class="tile-note">Send a note to the Prism team</span></span>
+        </a>
+      </nav>
 
-      <p class="foot">
-        Installing on a Mac? The terminal command asks for the same number and password:<br />
-        <code>curl -fsSL /install.sh | bash</code>
-      </p>
-    </div>
-
-    <script>
-      (function () {
-        var form = document.getElementById("login");
-        var error = document.getElementById("error");
-        var submit = document.getElementById("submit");
-        var setup = document.getElementById("setup");
-
-        fetch("/api/auth/status", { cache: "no-store" })
-          .then(function (r) { return r.json(); })
-          .then(function (s) {
-            if (s.authenticated) location.replace(s.admin ? "/admin" : "/app");
-            if (s.needsSetup) setup.hidden = false;
-            if (!s.configured) {
-              // Sign-in cannot work yet, so say that instead of letting the form
-              // fail with a server error.
-              setup.innerHTML =
-                "Sign-in is not configured for this site yet: set <code>PRISM_AUTH_SECRET</code> " +
-                "(16+ characters) in the server's environment, then reload this page.";
-              setup.hidden = false;
-              submit.disabled = true;
-              submit.textContent = "Sign-in not configured";
-            }
-          })
-          .catch(function () {});
-
-        form.addEventListener("submit", function (event) {
-          event.preventDefault();
-          error.hidden = true;
-          submit.disabled = true;
-          submit.textContent = "Signing in…";
-
-          fetch("/api/auth/login", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              number: document.getElementById("number").value,
-              password: document.getElementById("password").value
-            })
-          })
-            .then(function (r) { return r.json().then(function (b) { return { status: r.status, body: b }; }); })
-            .then(function (result) {
-              if (result.body && result.body.ok) {
-                location.replace(result.body.admin ? "/admin" : "/app");
-                return;
-              }
-              error.textContent = (result.body && result.body.error) || "Sign-in failed.";
-              error.hidden = false;
-            })
-            .catch(function () {
-              error.textContent = "Could not reach the server. Check your connection and try again.";
-              error.hidden = false;
-            })
-            .then(function () {
-              submit.disabled = false;
-              submit.textContent = "Sign in";
-            });
-        });
-      })();
-    </script>
+      <footer>Prism 3.0.0 · <a href="/login">Admin sign-in</a></footer>
+    </main>
   </body>
 </html>
