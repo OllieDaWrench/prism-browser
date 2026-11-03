@@ -100,13 +100,24 @@
                 <code>Open Prism.command</code> on Mac or <code>Open Prism.bat</code> on Windows. The first start
                 unpacks its own copy of Node.js into that same folder — no administrator password.
               </p>
+              <div class="terminal">
+                <p>
+                  <strong>Mac, and don't want the "cannot be verified" warning?</strong> Paste this into Terminal.
+                  Files fetched this way are never quarantined, so the launcher opens with a plain double-click —
+                  no developer account involved.
+                </p>
+                <div class="terminal-row">
+                  <code id="install-cmd">curl -fsSL /install.sh | bash</code>
+                  <button type="button" class="copy-button" id="copy-install" data-copy="install-cmd">Copy</button>
+                </div>
+              </div>
               <button type="button" id="live-fallback" class="ghost-button">Stay in proxy mode</button>
             </div>
           </div>
         </div>
       </main>
     </div>
-    <div id="ver">2.4.0</div>
+    <div id="ver">2.5.0</div>
     <script src="/app.js"></script>
   </body>
 </html>

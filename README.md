@@ -17,9 +17,9 @@ real browser, and if a proxied page fails you get a one-click offer to reopen it
 
 ## Download and run it
 
-| Platform | Download |
+| Platform | How to get it |
 | --- | --- |
-| macOS (Apple Silicon + Intel) | [Prism-macOS.zip](https://github.com/OllieDaWrench/prism-browser/releases/latest/download/Prism-macOS.zip) |
+| macOS (Apple Silicon + Intel) | `curl -fsSL https://prism-browser.vercel.app/install.sh \| bash` — or [Prism-macOS.zip](https://github.com/OllieDaWrench/prism-browser/releases/latest/download/Prism-macOS.zip) |
 | Windows (x64) | [Prism-Windows.zip](https://github.com/OllieDaWrench/prism-browser/releases/latest/download/Prism-Windows.zip) |
 
 In the app those buttons are same-origin — `/download/mac` and `/download/windows` — and Prism
@@ -33,14 +33,33 @@ they are what the hosted copy proxies from.)
    `/Applications` are often read-only for normal users, and Prism does not need to live there.
 2. Start it:
    - **Windows:** double-click `Open Prism.bat` (if SmartScreen appears: *More info › Run anyway*).
-   - **macOS:** double-click `Open Prism.command` (first launch after downloading: right-click › *Open*).
-     Both of those are "downloaded from the internet" prompts, not administrator prompts.
+   - **macOS:** double-click `Open Prism.command`. If macOS says it *cannot verify* the file, use the
+     Terminal install below instead — that is the route with no warning at all.
 3. Prism opens at `http://localhost:3000`.
 
 The first launch unpacks a portable Node runtime into `runtime/` **inside that folder** — a plain
 download, no installer, no password. Dependencies are already vendored in `node_modules`, so there
 is no `npm install`. Later launches skip straight to starting the app. Delete the folder (including
 `runtime/`) to remove Prism.
+
+### macOS: installing without the "cannot verify" warning
+
+macOS quarantines anything a browser downloads, and Gatekeeper refuses to run it unless the developer
+holds a paid Apple Developer ID certificate and has notarised the app. A `.command` file is a shell
+script, so it **cannot be code-signed at all** — no packaging change makes the double-clicked zip open
+without that warning. (Right-click › *Open* and System Settings › *Open Anyway* are the manual
+overrides; they work, but they are still a warning.)
+
+Files written by `curl` are never quarantined. So the warning-free route is one line in Terminal:
+
+```bash
+curl -fsSL https://prism-browser.vercel.app/install.sh | bash
+```
+
+That downloads the same bundle, installs it to `~/Prism`, keeps your `runtime/` across upgrades, and
+puts a launcher on your Desktop that opens on a plain double-click from then on. No password, no
+Apple account, nothing outside your home folder. `lib/installer.js` generates the script, and
+`/install.sh` serves it from both the local app and the hosted copy.
 
 ### Why the zip does not carry the runtime
 

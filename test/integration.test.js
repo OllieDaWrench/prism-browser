@@ -311,3 +311,25 @@ test("the served app points download buttons at /download", async () => {
   assert.match(html, /href="\/download\/windows"/);
   assert.doesNotMatch(html, /href="https:\/\/github\.com\/[^"]*releases/);
 });
+
+test("the macOS one-liner is served by the app itself", async () => {
+  // Piping into bash needs the body, so this must be text/plain — never an
+  // attachment, and never HTML.
+  const res = await fetch(prism + "/install.sh");
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get("content-type"), /text\/plain/);
+  assert.doesNotMatch(res.headers.get("content-disposition") || "", /attachment/);
+  const body = await res.text();
+  assert.match(body, /^#!\/bin\/bash/);
+  // it points back at this server, so a local install uses the local bundle
+  assert.ok(body.includes(`ORIGIN="${prism}"`), "should fetch its bundle from this origin");
+  assert.match(body, /BUNDLE_URL=.*\$ORIGIN\/download\/mac/);
+  assert.doesNotMatch(body, /\bsudo\b/);
+});
+
+test("the download card offers the warning-free install for Macs", async () => {
+  const html = await (await fetch(prism + "/")).text();
+  assert.match(html, /id="install-cmd"/);
+  assert.match(html, /\/install\.sh \| bash/);
+  assert.match(html, /copy-install/);
+});

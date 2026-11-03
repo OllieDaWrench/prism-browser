@@ -390,6 +390,40 @@ function showLiveUnavailable(context) {
   document.getElementById("dl-windows").href = DOWNLOAD_WINDOWS;
 }
 
+/* The macOS one-liner has to be copy-pasteable, so it carries this origin. */
+const INSTALL_CMD = `curl -fsSL ${location.origin}/install.sh | bash`;
+
+function wireInstallOneLiner() {
+  const code = document.getElementById("install-cmd");
+  if (code) code.textContent = INSTALL_CMD;
+
+  const button = document.getElementById("copy-install");
+  if (!button) return;
+  button.addEventListener("click", async () => {
+    const original = button.textContent;
+    try {
+      await navigator.clipboard.writeText(INSTALL_CMD);
+    } catch {
+      // clipboard access can be refused; select the text so the user can copy it
+      const range = document.createRange();
+      if (code) {
+        range.selectNodeContents(code);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+    }
+    button.textContent = "Copied";
+    button.classList.add("copied");
+    setTimeout(() => {
+      button.textContent = original;
+      button.classList.remove("copied");
+    }, 1600);
+  });
+}
+
+wireInstallOneLiner();
+
 document.getElementById("live-fallback").addEventListener("click", () => {
   liveOverlay.hidden = true;
   setPreference("proxy");
