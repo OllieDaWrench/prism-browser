@@ -58,6 +58,17 @@ test("app.js uses the same same-origin urls", () => {
   assert.match(app, /setAttribute\("download"/);
 });
 
+test("the signed-in main screen exposes a working sign-out control", () => {
+  const html = read("private", "app.html");
+  const app = read("public", "app.js");
+  assert.match(html, /id="logout"[^>]*hidden/);
+  assert.match(html, /aria-label="Sign out"/);
+  assert.match(app, /\/api\/auth\/status/);
+  assert.match(app, /logoutBtn\.hidden = !res\.ok \|\| !status\.authenticated/);
+  assert.match(app, /\/api\/auth\/logout/);
+  assert.match(app, /window\.location\.replace\("\/"\)/);
+});
+
 test("the README documents both downloads and the no-admin promise", () => {
   const readme = read("README.md");
   assert.ok(readme.includes(DOWNLOADS.mac.fallback));

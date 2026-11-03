@@ -17,6 +17,7 @@ const backBtn = document.getElementById("back");
 const fwdBtn = document.getElementById("fwd");
 const reloadBtn = document.getElementById("reload");
 const homeBtn = document.getElementById("home");
+const logoutBtn = document.getElementById("logout");
 const engineBtn = document.getElementById("engine");
 const engineLabel = document.getElementById("engine-label");
 const engineNote = document.getElementById("engine-note");
@@ -838,6 +839,18 @@ reloadBtn.addEventListener("click", () => {
 
 homeBtn.addEventListener("click", goHome);
 
+logoutBtn.addEventListener("click", async () => {
+  logoutBtn.disabled = true;
+  try {
+    const response = await fetch("/api/auth/logout", { method: "POST", cache: "no-store" });
+    if (!response.ok) throw new Error("Sign out failed");
+    window.location.replace("/");
+  } catch {
+    logoutBtn.disabled = false;
+    showBanner("Could not sign out. Please try again.");
+  }
+});
+
 window.addEventListener("message", (event) => {
   if (!event.data) return;
   if (event.data.type === "prism-url" && event.data.url) setCurrentUrl(event.data.url);
@@ -941,6 +954,15 @@ async function boot() {
       }
     })(),
     detectTransport(),
+    (async () => {
+      try {
+        const res = await fetch("/api/auth/status", { cache: "no-store" });
+        const status = await res.json();
+        logoutBtn.hidden = !res.ok || !status.authenticated;
+      } catch {
+        logoutBtn.hidden = true;
+      }
+    })(),
   ]);
   renderEngine();
   if (!proxyReachable) {

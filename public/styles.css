@@ -89,6 +89,23 @@ button {
   cursor: default;
 }
 
+.chrome button.logout-button {
+  display: flex;
+  width: auto;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.chrome button.logout-button[hidden] {
+  display: none;
+}
+
 .chrome svg {
   width: 18px;
   height: 18px;
@@ -718,5 +735,12 @@ body.modal-open {
   }
   .engine {
     padding: 0 10px;
+  }
+  .chrome button.logout-button {
+    width: 34px;
+    padding: 0;
+  }
+  .logout-button span {
+    display: none;
   }
 }
