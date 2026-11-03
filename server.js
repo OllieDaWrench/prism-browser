@@ -10,6 +10,7 @@ const { upgrade: wsUpgrade } = require("./lib/ws");
 const { LiveBrowser, LiveSession } = require("./lib/live");
 const { handleDownload } = require("./lib/downloads");
 const { installerScript } = require("./lib/installer");
+const { openExternal } = require("./lib/opener");
 
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || "0.0.0.0";
@@ -46,6 +47,23 @@ app.get(["/install.sh", "/install"], (req, res) => {
   res.setHeader("Content-Disposition", "inline; filename=\"install.sh\"");
   res.setHeader("Cache-Control", "no-store");
   res.send(installerScript(origin));
+});
+
+/* Open a page in the user's own browser — the reliable way past bot protection.
+ * Local only: the hosted copy has no desktop to open anything on. */
+app.post("/open", express.json({ limit: "8kb" }), (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const url = (req.body && (req.body.url || req.body.target)) || req.query.url;
+  if (!url) return res.status(400).json({ ok: false, error: "No address given." });
+  // A remote page must not be able to make Prism launch things: only our own UI
+  // is allowed to call this.
+  const origin = req.get("origin");
+  const host = req.get("host");
+  if (origin && host && origin.replace(/^https?:\/\//, "") !== host) {
+    return res.status(403).json({ ok: false, error: "Cross-origin request refused." });
+  }
+  const result = openExternal(url);
+  res.status(result.ok ? 200 : 400).json(result);
 });
 
 app.post("/live/warm", async (req, res) => {

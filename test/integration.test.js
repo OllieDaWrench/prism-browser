@@ -333,3 +333,27 @@ test("the download card offers the warning-free install for Macs", async () => {
   assert.match(html, /\/install\.sh \| bash/);
   assert.match(html, /copy-install/);
 });
+
+test("the app can hand a page to the user's own browser", async () => {
+  // The reliable route past bot protection. Spawning is stubbed by the library's
+  // own validation here: a bad address must be rejected before anything runs.
+  const bad = await fetch(prism + "/open", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url: "file:///etc/passwd" }),
+  });
+  assert.equal(bad.status, 400);
+  assert.equal((await bad.json()).ok, false);
+
+  // and a cross-origin caller is refused outright
+  const cross = await fetch(prism + "/open", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Origin: "https://evil.example" },
+    body: JSON.stringify({ url: "https://example.com/" }),
+  });
+  assert.equal(cross.status, 403);
+
+  // nothing was launched for either
+  const empty = await fetch(prism + "/open", { method: "POST" });
+  assert.equal(empty.status, 400);
+});
