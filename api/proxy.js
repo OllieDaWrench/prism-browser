@@ -40,9 +40,9 @@ function rebuildUrl(rawUrl) {
 module.exports = async function handler(req, res) {
   const original = req.url || "/";
 
-  // This function also serves the app itself through the catch-all rewrite, so
-  // the gate lives here: every page and every proxied address passes it.
-  if (!gate.check(req, res)) return;
+  // The catch-all rewrite is another way into proxied pages, so protect the
+  // function itself as well as the explicit /app route.
+  if (!gate.check(req, res, { adminOnly: true })) return;
 
   req.url = rebuildUrl(original);
 

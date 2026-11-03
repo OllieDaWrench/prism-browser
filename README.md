@@ -102,9 +102,15 @@ unpacks its runtime with an ordinary download.
 From a checkout (needs Node 22+, no admin needed):
 
 ```bash
-npm install     # express, nothing else
-npm start       # http://localhost:3000
+npm install     # express and the Vercel Blob SDK
+npm start       # http://localhost:3000 — public home; choose Web Browser to open /app
 ```
+
+The public homepage has no sign-in form. **Web Browser** opens `/app`; the hosted site serves the
+browser only to administrators and shows an under-construction page to everyone else. **Apps** is an
+under-construction destination, **Games** is disabled, and **Feedback** opens a short in-app form.
+Feedback is stored privately using the configured Vercel Blob store; a local run writes to
+`data/feedback.jsonl`. Admin sign-in remains available at `/login`.
 
 ### Why downloads at all?
 
@@ -139,8 +145,9 @@ If Live mode is unavailable the app says so and runs proxy-only. `GET /live/stat
 | `PRISM_AUTH_SECRET` | unset | 16+ random characters; required for hosted sign-in and local sign-in |
 | `PRISM_AUTH` | unset | Local copies only: `1` requires sign-in, `0` keeps the local copy open |
 | `PRISM_USERS` | unset | A starting list, `[{"number":"482913","password":"...","role":"admin"}]` |
-| `BLOB_READ_WRITE_TOKEN` | unset | Vercel Blob — private account storage, added when you connect a Blob store |
+| `BLOB_READ_WRITE_TOKEN` | unset | Vercel Blob — private account and feedback storage, added when you connect a Blob store |
 | `PRISM_USERS_FILE` | `data/users.json` | Where accounts go when there is no Blob store |
+| `PRISM_FEEDBACK_FILE` | `data/feedback.jsonl` | Where local feedback submissions are appended |
 
 ### Accounts (who is allowed in)
 
@@ -178,14 +185,16 @@ history. Local copies without `PRISM_AUTH_SECRET` stay open. Hosted deployments 
 
 ## Deploying to Vercel (and why the hosted copy is proxy-only)
 
-`vercel.json` serves a public invitation page and routes the private app shell and proxy requests:
+`vercel.json` serves the public homepage and routes the browser, feedback and proxy requests:
 
 ```
-/ and /index.html                -> public invitation page (sign-in)
-/app                             -> /api/auth/home (app shell only after sign-in)
+/ and /index.html                -> public navigation homepage (no sign-in form)
+/apps.html, /feedback.html       -> public destinations
+/app                             -> /api/auth/home (browser only for admins; otherwise under construction)
+/api/feedback                    -> private feedback storage
 /api/:path*                      -> identity, so functions short-circuit the catch-all
-/live/status                     -> /api/live
-/https/:path*                    -> /api/proxy?__path=https/:path*
+/live/status                     -> /api/live (admin session required)
+/https/:path*                    -> /api/proxy?__path=https/:path* (admin session required)
 /http/:path*, /p/:path*, /r/:path*  -> same pattern
 /(.*)                            -> /api/proxy?__path=$1      (safety net)
 ```
