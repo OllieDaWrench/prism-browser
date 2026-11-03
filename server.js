@@ -1,12 +1,14 @@
 "use strict";
 
 const http = require("http");
+const { spawn } = require("child_process");
 const path = require("path");
 const express = require("express");
 
 const { handleProxy, tunnelWebSocket, errorPage, targetFromLocal, proxyPath } = require("./lib/proxy");
 const { upgrade: wsUpgrade } = require("./lib/ws");
 const { LiveBrowser, LiveSession } = require("./lib/live");
+const { handleDownload } = require("./lib/downloads");
 
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || "0.0.0.0";
@@ -25,6 +27,14 @@ app.get("/live/status", async (req, res) => {
   if (browser.state === "idle" || browser.state === "starting") await browser.start();
   res.json({ ...browser.status(), hosted: false, proxyMode: "path" });
 });
+
+app.all("/download/:platform", (req, res) => {
+  handleDownload(req, res, req.params.platform).catch(() => {
+    if (!res.headersSent) res.status(502).end();
+  });
+});
+
+app.get("/download", (req, res) => res.redirect(302, "/download/mac"));
 
 app.post("/live/warm", async (req, res) => {
   if (browser.state === "idle") browser.start();
@@ -50,7 +60,9 @@ app.all(proxyRoute, (req, res) => {
   });
 });
 
-app.get("/healthz", (req, res) => res.json({ ok: true, uptime: process.uptime() }));
+app.get("/healthz", (req, res) =>
+  res.json({ ok: true, prism: true, version: require("./package.json").version, uptime: process.uptime() })
+);
 
 /**
  * Safety net for pages that navigate by script (`location = "/settings"`).
@@ -140,24 +152,76 @@ server.on("upgrade", async (req, socket, head) => {
 
 /* ---------------- lifecycle ---------------- */
 
+/** Open the user's default browser. Used by the launchers (PRISM_OPEN=1). */
+function openBrowser(url) {
+  if (process.env.PRISM_OPEN !== "1") return;
+  const attempts =
+    process.platform === "win32"
+      ? [["cmd", ["/c", "start", "", url]]]
+      : process.platform === "darwin"
+        ? [["open", [url]]]
+        : [
+            ["xdg-open", [url]],
+            ["gio", ["open", url]],
+          ];
+  for (const [cmd, args] of attempts) {
+    try {
+      const child = spawn(cmd, args, { detached: true, stdio: "ignore" });
+      child.on("error", () => {});
+      child.unref();
+      return;
+    } catch {}
+  }
+}
+
+/**
+ * Listen on an unprivileged port. If it is taken (something else on 3000), walk
+ * up a few ports instead of failing: the launchers just want a working Prism,
+ * and none of these need elevated privileges.
+ */
 function start(port = PORT, host = HOST) {
-  return new Promise((resolve) => {
-    server.listen(port, host, () => {
-      const actual = server.address().port;
-      console.log(`Prism running at http://localhost:${actual}`);
-      // Warm the live browser in the background so the first click is instant.
-      if (process.env.PRISM_NO_LIVE !== "1") {
-        browser.start().then((b) => {
-          const s = b.status();
-          console.log(
-            s.available
-              ? `Live engine ready (${s.browser})`
-              : `Live engine unavailable: ${s.reason || s.state}`
-          );
-        });
-      }
-      resolve(actual);
-    });
+  return new Promise((resolve, reject) => {
+    let candidate = port;
+    let attempts = 0;
+
+    const attempt = () => {
+      const onError = (err) => {
+        server.removeListener("listening", onListening);
+        if ((err.code === "EADDRINUSE" || err.code === "EACCES") && attempts < 10) {
+          attempts += 1;
+          candidate += 1;
+          attempt();
+          return;
+        }
+        reject(err);
+      };
+
+      const onListening = () => {
+        server.removeListener("error", onError);
+        const actual = server.address().port;
+        if (actual !== port) console.log(`Port ${port} was busy, so Prism used ${actual}.`);
+        console.log(`Prism running at http://localhost:${actual}`);
+        // Warm the live browser in the background so the first click is instant.
+        if (process.env.PRISM_NO_LIVE !== "1") {
+          browser.start().then((b) => {
+            const s = b.status();
+            console.log(
+              s.available
+                ? `Live engine ready (${s.browser})`
+                : `Live engine unavailable: ${s.reason || s.state}`
+            );
+          });
+        }
+        openBrowser(`http://localhost:${actual}`);
+        resolve(actual);
+      };
+
+      server.once("error", onError);
+      server.once("listening", onListening);
+      server.listen(candidate, host);
+    };
+
+    attempt();
   });
 }
 
@@ -169,7 +233,14 @@ function shutdown() {
 }
 
 if (require.main === module) {
-  start();
+  start().catch((err) => {
+    if (err && err.code === "EADDRINUSE") {
+      console.error(`\nPorts ${PORT}-${PORT + 10} are all busy. Close whatever is using them, or set PORT.`);
+    } else {
+      console.error("\nPrism could not start:", err && err.message);
+    }
+    process.exitCode = 1;
+  });
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
   process.on("uncaughtException", (err) => {

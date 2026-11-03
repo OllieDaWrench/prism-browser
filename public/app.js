@@ -50,8 +50,8 @@ let liveSession = null; // { url }
 
 const INTERNAL_NAV = /^\/(live|proxy|p|r|ws)(\/|$)/;
 /** Mirror of lib/desktop.js — test/desktop.test.js keeps these in sync. */
-const DOWNLOAD_MAC = "https://github.com/OllieDaWrench/prism-browser/releases/latest/download/Prism-macOS.zip";
-const DOWNLOAD_WINDOWS = "https://github.com/OllieDaWrench/prism-browser/releases/latest/download/Prism-Windows.zip";
+const DOWNLOAD_MAC = "/download/mac";
+const DOWNLOAD_WINDOWS = "/download/windows";
 
 /**
  * Sites whose JavaScript cannot survive being re-served from another origin.
@@ -290,8 +290,7 @@ function showDownloadBanner(text) {
   if (!bannerLink) {
     bannerLink = document.createElement("a");
     bannerLink.className = "banner-link";
-    bannerLink.target = "_blank";
-    bannerLink.rel = "noreferrer noopener";
+    bannerLink.setAttribute("download", "");
     bannerLink.textContent = "Download for Mac / Windows";
     banner.appendChild(bannerLink);
   }

@@ -86,19 +86,19 @@
               <p id="live-reason"></p>
               <p class="hint" id="live-hint"></p>
               <div class="downloads">
-                <a class="download" id="dl-mac" href="https://github.com/OllieDaWrench/prism-browser/releases/latest/download/Prism-macOS.zip" target="_blank" rel="noreferrer noopener">
+                <a class="download" id="dl-mac" href="/download/mac" download>
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11" /><path d="m7.5 10.5 4.5 4.5 4.5-4.5" /><path d="M4 20h16" /></svg>
                   Download for Mac
                 </a>
-                <a class="download" id="dl-windows" href="https://github.com/OllieDaWrench/prism-browser/releases/latest/download/Prism-Windows.zip" target="_blank" rel="noreferrer noopener">
+                <a class="download" id="dl-windows" href="/download/windows" download>
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11" /><path d="m7.5 10.5 4.5 4.5 4.5-4.5" /><path d="M4 20h16" /></svg>
                   Download for Windows
                 </a>
               </div>
               <p class="requires">
-                Needs Node.js 22+ (one time, from
-                <a href="https://nodejs.org/en/download" target="_blank" rel="noreferrer noopener">nodejs.org</a>). Unzip, then
-                double-click <code>Open Prism.command</code> on Mac or <code>Open Prism.bat</code> on Windows.
+                No installer, no admin rights, nothing installed system-wide: unzip it and double-click
+                <code>Open Prism.command</code> on Mac or <code>Open Prism.bat</code> on Windows. The first start
+                unpacks its own copy of Node.js into that same folder — no administrator password.
               </p>
               <button type="button" id="live-fallback" class="ghost-button">Stay in proxy mode</button>
             </div>
@@ -106,7 +106,7 @@
         </div>
       </main>
     </div>
-    <div id="ver">2.3.1</div>
+    <div id="ver">2.4.0</div>
     <script src="/app.js"></script>
   </body>
 </html>
