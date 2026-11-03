@@ -77,7 +77,8 @@ function liveStatus(available) {
       };
 }
 
-function makeUi(available) {
+function makeUi(available, serverOptions = {}) {
+  const { pathRewrites = true, proxyEndpoint = true, hosted = false } = serverOptions;
   const dom = new JSDOM(html, {
     url: ORIGIN + "/",
     runScripts: "dangerously",
@@ -85,11 +86,27 @@ function makeUi(available) {
     beforeParse(window) {
       FakeWebSocket.instances = [];
       window.WebSocket = FakeWebSocket;
-      window.fetch = async (url) => {
-        if (String(url).includes("/live/status")) {
-          return { ok: true, json: async () => liveStatus(available) };
+      window.fetch = async (url, init) => {
+        const href = String(url);
+        if (href.includes("/live/status")) {
+          return {
+            ok: true,
+            headers: { get: () => null },
+            json: async () => ({ ...liveStatus(available), hosted }),
+          };
         }
-        return { ok: true, json: async () => ({}) };
+        // the transport probes
+        if (href.startsWith("/https/!invalid-host!/")) {
+          if (!pathRewrites) throw new Error("404 from host");
+          return { ok: false, headers: { get: (k) => (k.toLowerCase() === "x-prism-proxy" ? "1" : null) } };
+        }
+        if (href === "/api/proxy") {
+          if (!proxyEndpoint) {
+            return { ok: false, headers: { get: () => null } };
+          }
+          return { ok: false, headers: { get: (k) => (k.toLowerCase() === "x-prism-proxy" ? "1" : null) } };
+        }
+        return { ok: true, headers: { get: () => null }, json: async () => ({}) };
       };
       window.ResizeObserver = undefined;
     },
@@ -250,5 +267,48 @@ test("the engine pill pins an engine and remembers it", { skip: !JSDOM && "jsdom
   await tick();
   assert.equal(window.localStorage.getItem("prism:engine"), "proxy");
   assert.equal(window.document.getElementById("engine-label").textContent, "Proxy");
+  dom.window.close();
+});
+
+test("hosted deploy with dead path rewrites falls back to the rewrite-free endpoint", async () => {
+  if (!JSDOM) return;
+  const dom = makeUi(false, { hosted: true, pathRewrites: false, proxyEndpoint: true });
+  const { window } = dom;
+  await tick(60);
+
+  submit(window, "#start-q", "example.com");
+  await tick();
+
+  assert.equal(
+    window.document.getElementById("view").src,
+    `${ORIGIN}/api/proxy?url=${encodeURIComponent("https://example.com/")}`
+  );
+  assert.match(window.document.getElementById("engine-note").textContent, /Hosted copy/);
+  assert.equal(window.document.getElementById("banner").hidden, true);
+  dom.window.close();
+});
+
+test("working path rewrites are preferred even on a hosted deploy", async () => {
+  if (!JSDOM) return;
+  const dom = makeUi(false, { hosted: true, pathRewrites: true });
+  const { window } = dom;
+  await tick(60);
+
+  submit(window, "#start-q", "example.com");
+  await tick();
+  assert.equal(window.document.getElementById("view").src, `${ORIGIN}/https/example.com/`);
+  dom.window.close();
+});
+
+test("a deploy with no proxy at all says so instead of showing a blank page", async () => {
+  if (!JSDOM) return;
+  const dom = makeUi(false, { hosted: true, pathRewrites: false, proxyEndpoint: false });
+  const { window } = dom;
+  await tick(60);
+
+  const banner = window.document.getElementById("banner");
+  assert.equal(banner.hidden, false);
+  assert.match(window.document.getElementById("banner-text").textContent, /cannot proxy/);
+  assert.match(window.document.getElementById("engine-note").textContent, /not running its proxy/);
   dom.window.close();
 });

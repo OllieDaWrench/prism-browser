@@ -1,6 +1,10 @@
 "use strict";
 
-/** Live engine status on serverless: always unavailable, by design. */
+/**
+ * Live engine status on a serverless host: always unavailable, by design.
+ * The live engine keeps a Chromium process and a websocket alive, which needs
+ * a long-running Node process — that only exists when Prism runs locally.
+ */
 module.exports = function handler(req, res) {
   res.setHeader("Content-Type", "application/json");
   res.setHeader("Cache-Control", "no-store");
@@ -9,9 +13,10 @@ module.exports = function handler(req, res) {
       engine: "live",
       available: false,
       state: "unavailable",
+      hosted: true,
       browser: null,
-      reason: "Live mode needs a long-running Node process (it drives a real browser).",
-      hint: "Run Prism locally with `npm start` to use Live mode.",
+      reason: "Live mode needs a long-running process to drive a real browser, so it is not available on this hosted copy.",
+      hint: "Run Prism locally (`npm start`, or Open Prism.bat on Windows) to use Live mode, which is what loads ChatGPT, Reddit, Spotify, Twitch and other JavaScript apps.",
     })
   );
 };

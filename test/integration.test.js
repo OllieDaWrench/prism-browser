@@ -157,6 +157,36 @@ test("keeps upstream error status codes", async () => {
   assert.equal(res.status, 404);
 });
 
+test("marks every proxy response so the UI can verify routing", async () => {
+  const res = await fetch(target + "/");
+  assert.equal(res.headers.get("x-prism-proxy"), "1");
+  const rejected = await fetch(prism + "/https/!invalid!/");
+  assert.equal(rejected.headers.get("x-prism-proxy"), "1");
+});
+
+test("serves the rewrite-free /api/proxy endpoint in query mode", async () => {
+  const res = await fetch(`${prism}/api/proxy?url=${encodeURIComponent(origin + "/")}`);
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get("x-prism-proxy"), "1");
+  const html = await res.text();
+  // every emitted url stays on the endpoint that needs no rewrite rules
+  assert.match(html, /href="\/api\/proxy\?url=http%3A%2F%2F127\.0\.0\.1%3A\d+%2Fnext"/);
+  assert.match(html, /src="\/api\/proxy\?url=http%3A%2F%2F127\.0\.0\.1%3A\d+%2Fpic\.png"/);
+});
+
+test("query mode redirects stay inside the endpoint", async () => {
+  const res = await fetch(`${prism}/api/proxy?url=${encodeURIComponent(origin + "/redir")}`, {
+    redirect: "manual",
+  });
+  assert.equal(res.status, 302);
+  assert.match(res.headers.get("location"), /^\/api\/proxy\?url=http%3A%2F%2F127\.0\.0\.1%3A\d+%2Fnext$/);
+});
+
+test("path mode redirects stay path mapped", async () => {
+  const res = await fetch(target + "/redir", { redirect: "manual" });
+  assert.match(res.headers.get("location"), /^\/http\/127\.0\.0\.1:\d+\/next$/);
+});
+
 test("supports the legacy query form and /p/ form", async () => {
   const viaQuery = await fetch(`${prism}/proxy?url=${encodeURIComponent(origin + "/")}`);
   assert.equal(viaQuery.status, 200);

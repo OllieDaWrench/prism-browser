@@ -2,11 +2,19 @@
   "framework": null,
   "buildCommand": "",
   "outputDirectory": "public",
+  "functions": {
+    "api/proxy.js": {
+      "maxDuration": 60
+    }
+  },
   "rewrites": [
+    { "source": "/api/:path*", "destination": "/api/:path*" },
     { "source": "/live/status", "destination": "/api/live" },
+    { "source": "/live/warm", "destination": "/api/live" },
     { "source": "/https/:path*", "destination": "/api/proxy?__path=https/:path*" },
     { "source": "/http/:path*", "destination": "/api/proxy?__path=http/:path*" },
     { "source": "/p/:path*", "destination": "/api/proxy?__path=p/:path*" },
-    { "source": "/proxy", "destination": "/api/proxy" }
+    { "source": "/r/:path*", "destination": "/api/proxy?__path=r/:path*" },
+    { "source": "/(.*)", "destination": "/api/proxy?__path=$1" }
   ]
 }

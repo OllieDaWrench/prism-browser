@@ -33,7 +33,16 @@ const stack = [];
 let index = -1;
 let browsing = false;
 let preference = localStorage.getItem("prism:engine") || "auto";
-let live = { available: false, state: "idle", browser: null, reason: "", hint: "" };
+let live = { available: false, state: "idle", browser: null, reason: "", hint: "", hosted: false, proxyMode: "path" };
+/**
+ * How this copy of Prism reaches its proxy. "path" maps target URLs onto
+ * /https/<host>/... and needs the server (or the host's rewrite rules) to hand
+ * those paths to the proxy. "query" is the rewrite-free fallback used when a
+ * deployment only routes /api/proxy, so a hosted Prism cannot 404 itself.
+ */
+let transport = { mode: "path", base: null };
+/** false when nothing proxies at all — e.g. the serverless function is missing. */
+let proxyReachable = true;
 let liveConn = null;
 let liveSession = null; // { url }
 
@@ -117,6 +126,14 @@ function toProxyPath(url) {
   }
 }
 
+/** The address Prism should frame for a target URL, in the active transport. */
+function toProxyUrl(url) {
+  if (transport.mode === "query") {
+    return (transport.base || "/api/proxy?url=") + encodeURIComponent(url);
+  }
+  return toProxyPath(url) || url;
+}
+
 function targetFromLocal(href) {
   let u;
   try {
@@ -128,6 +145,11 @@ function targetFromLocal(href) {
   const p = u.pathname;
   if (p.startsWith("/https/")) return "https://" + p.slice(7) + u.search + u.hash;
   if (p.startsWith("/http/")) return "http://" + p.slice(6) + u.search + u.hash;
+  if (u.pathname === "/api/proxy" || u.pathname === "/proxy") {
+    const viaQuery = u.searchParams.get("url") || u.searchParams.get("u");
+    if (viaQuery && /^https?:\/\//i.test(viaQuery)) return viaQuery;
+    return null;
+  }
   if (p.startsWith("/p/")) {
     const rest = p.slice(3);
     try {
@@ -141,6 +163,39 @@ function targetFromLocal(href) {
     } catch {}
   }
   return null;
+}
+
+/* ------------------------------------------------------------------ *
+ * transport: does this copy of Prism serve path-mapped urls?
+ * ------------------------------------------------------------------ */
+async function detectTransport() {
+  // Any target will do; an invalid one is rejected before any network call, so
+  // this probe is instant and works offline.
+  const probe = "/https/!invalid-host!/";
+  try {
+    const res = await fetch(probe, { method: "HEAD", cache: "no-store" });
+    if (res.headers.get("x-prism-proxy") === "1") {
+      proxyReachable = true;
+      transport = { mode: "path", base: null };
+      return;
+    }
+  } catch {}
+
+  // Path mapping is not routed here. Try the endpoint serverless deploys can
+  // always reach, and verify it actually is Prism answering. Asking for no
+  // target is answered straight away with Prism's 400 page.
+  const base = "/api/proxy?url=";
+  try {
+    const res = await fetch("/api/proxy", { method: "HEAD", cache: "no-store" });
+    if (res.headers.get("x-prism-proxy") === "1") {
+      proxyReachable = true;
+      transport = { mode: "query", base };
+      return;
+    }
+  } catch {}
+
+  proxyReachable = false;
+  transport = { mode: "path", base: null };
 }
 
 /* ------------------------------------------------------------------ *
@@ -168,10 +223,15 @@ function renderEngine() {
       ? `Engine: Auto (currently ${effective}). Click to pin Proxy.`
       : `Engine pinned to ${preference === "live" ? "Live" : "Proxy"}. Click to change.`;
 
-  if (!live.available) {
+  if (!proxyReachable) {
+    engineNote.textContent =
+      "This copy of Prism is not running its proxy: pages cannot be loaded. Run Prism locally with `npm start`, or check the deployment's routing.";
+  } else if (!live.available) {
     engineNote.textContent = live.state === "starting"
       ? "Starting the live browser engine…"
-      : `Proxy engine only — ${live.reason || "no Chromium browser found"}`;
+      : live.hosted
+        ? "Hosted copy — proxy engine only. Live mode needs the local app."
+        : `Proxy engine only — ${live.reason || "no Chromium browser found"}`;
   } else if (preference === "auto") {
     engineNote.textContent = `Auto engine. Live browser ready (${live.browser}) — pages that need real JavaScript will open there.`;
   } else if (preference === "live") {
@@ -253,8 +313,13 @@ function loadProxy(url) {
   teardownLive();
   showStage("proxy");
   setLoading(true);
-  iframe.src = toProxyPath(url) || url;
+  iframe.src = toProxyUrl(url);
 }
+
+iframe.addEventListener("error", () => {
+  setLoading(false);
+  onProxyFailure();
+});
 
 iframe.addEventListener("load", () => {
   setLoading(false);
@@ -583,7 +648,7 @@ reloadBtn.addEventListener("click", () => {
     liveSend({ t: "reload" });
     setLoading(true);
   } else {
-    iframe.src = toProxyPath(entry.url);
+    iframe.src = toProxyUrl(entry.url);
     setLoading(true);
   }
 });
@@ -632,13 +697,26 @@ document.addEventListener("keydown", (event) => {
  * ------------------------------------------------------------------ */
 async function boot() {
   renderEngine();
-  try {
-    const res = await fetch("/live/status", { cache: "no-store" });
-    live = await res.json();
-  } catch {
-    live = { available: false, state: "unavailable", reason: "Could not reach the Prism server.", hint: "" };
-  }
+  await Promise.all([
+    (async () => {
+      try {
+        const res = await fetch("/live/status", { cache: "no-store" });
+        const json = await res.json();
+        live = { ...live, ...json };
+      } catch {
+        live = { ...live, available: false, state: "unavailable", reason: "Could not reach the Prism server." };
+      }
+    })(),
+    detectTransport(),
+  ]);
   renderEngine();
+  if (!proxyReachable) {
+    showBanner(
+      "This copy of Prism cannot proxy: the proxy endpoint is not answering. Run it locally with `npm start`.",
+      "Retry",
+      () => boot()
+    );
+  }
 }
 
 boot();

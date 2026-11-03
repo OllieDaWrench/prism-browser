@@ -13,7 +13,7 @@ const { boot } = require("../lib/shim");
 const PAGE = "https://example.com/dir/page?q=1";
 const PREFIX = "/https/example.com";
 
-function makeEnv(page = PAGE) {
+function makeEnv(page = PAGE, options = {}) {
   const calls = { fetch: [], xhr: [], ws: [], history: [], cookies: [], opened: [] };
 
   class FakeDocument {
@@ -110,7 +110,13 @@ function makeEnv(page = PAGE) {
   };
   sandbox.globalThis = sandbox;
 
-  vm.runInNewContext(`(${boot.toString()})(${JSON.stringify({ page, prefix: PREFIX })})`, sandbox);
+  const cfg = {
+    page,
+    prefix: PREFIX,
+    mode: options.mode || "path",
+    proxyBase: options.proxyBase || "/api/proxy?url=",
+  };
+  vm.runInNewContext(`(${boot.toString()})(${JSON.stringify(cfg)})`, sandbox);
   return { calls, window: windowObj, sandbox };
 }
 
@@ -191,4 +197,32 @@ test("shim replaces a page supplied cookie path", () => {
 test("shim blocks service worker registration", async () => {
   const env = makeEnv();
   await assert.rejects(env.sandbox.navigator.serviceWorker.register("/sw.js"));
+});
+
+test("query mode funnels every request through the rewrite-free endpoint", async () => {
+  const env = makeEnv(PAGE, { mode: "query" });
+  await env.window.fetch("/api/items?page=2");
+  await env.window.fetch("sibling.json");
+  assert.deepEqual(env.calls.fetch, [
+    "/api/proxy?url=" + encodeURIComponent("https://example.com/api/items?page=2"),
+    "/api/proxy?url=" + encodeURIComponent("https://example.com/dir/sibling.json"),
+  ]);
+});
+
+test("query mode leaves proxied urls alone and skips the websocket tunnel", async () => {
+  const env = makeEnv(PAGE, { mode: "query" });
+  const already = "https://prism.local/api/proxy?url=" + encodeURIComponent("https://example.com/x");
+  await env.window.fetch(already);
+  assert.deepEqual(env.calls.fetch, [already]);
+
+  // query mode has no socket tunnel, so sockets are dialled directly instead
+  // of being routed through /ws/ on the Prism origin
+  new env.window.WebSocket("wss://example.com/live");
+  assert.deepEqual(env.calls.ws, ["wss://example.com/live"]);
+});
+
+test("query mode leaves cookie paths alone", () => {
+  const env = makeEnv(PAGE, { mode: "query" });
+  env.sandbox.document.cookie = "token=abc; path=/";
+  assert.equal(env.calls.cookies[0], "token=abc; path=/");
 });
