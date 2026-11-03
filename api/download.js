@@ -9,12 +9,7 @@
 
 const { handleDownload } = require("../lib/downloads");
 
-module.exports.config = {
-  api: { bodyParser: false },
-  maxDuration: 60,
-};
-
-module.exports = async function handler(req, res) {
+async function handler(req, res) {
   const url = new URL(req.url, "http://vercel.local");
   const platform = url.searchParams.get("platform") || url.searchParams.get("os") || "";
   try {
@@ -25,4 +20,9 @@ module.exports = async function handler(req, res) {
     res.setHeader("Content-Type", "text/plain; charset=utf-8");
     res.end("Could not fetch that download. Try the releases page directly.");
   }
-};
+}
+
+module.exports = handler;
+// Read on by Vercel; the bundles are ~1 MB, so this is only headroom for a
+// slow upstream, never for a big body.
+module.exports.config = { api: { bodyParser: false }, maxDuration: 60 };

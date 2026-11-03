@@ -12,7 +12,15 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { Readable, Writable } = require("stream");
-const { handleDownload, assetFor, releaseUrl, ASSETS } = require("../lib/downloads");
+
+// Keep a real dist/ (built by scripts/package.sh) from shadowing the network
+// path these tests are about: the handler prefers a local bundle when present.
+const ISOLATED_DIST = fs.mkdtempSync(path.join(os.tmpdir(), "prism-dist-"));
+process.env.PRISM_DIST = ISOLATED_DIST;
+
+const { handleDownload, assetFor, releaseUrl, ASSETS, LOCAL_DIR } = require("../lib/downloads");
+
+test.after(() => fs.rmSync(ISOLATED_DIST, { recursive: true, force: true }));
 
 function fakeRes() {
   class FakeRes extends Writable {
@@ -68,14 +76,12 @@ function fakeFetch(response) {
   return fn;
 }
 
+/** A real Response, so the handler reads it exactly as it reads GitHub's. */
 function zipResponse(body = ZIP) {
-  const headers = { "content-type": "application/zip", "content-length": String(body.length) };
-  return {
-    ok: true,
+  return new Response(body, {
     status: 200,
-    headers: { get: (k) => headers[k.toLowerCase()] ?? null },
-    body: Readable.toWeb(Readable.from([body])),
-  };
+    headers: { "content-type": "application/zip", "content-length": String(body.length) },
+  });
 }
 
 const run = (req, res, platform, options) =>
@@ -163,7 +169,7 @@ test("an HTML error page is never saved as a zip", async () => {
 
 test("a 404 from the release is reported, not streamed", async () => {
   // make sure no locally built bundle can short-circuit this
-  fs.rmSync(path.join(require("../lib/downloads").LOCAL_DIR, "Prism-Windows.zip"), { force: true });
+  fs.rmSync(path.join(LOCAL_DIR, "Prism-Windows.zip"), { force: true });
   const res = fakeRes();
   await run(fakeReq(), res, "windows", {
     fetch: fakeFetch({
@@ -186,7 +192,6 @@ test("unknown platforms list the two that exist", async () => {
 
 test("a bundle in dist/ is served straight from disk", async () => {
   // scripts/package.sh writes here, and a local Prism then hands out its own build
-  const { LOCAL_DIR } = require("../lib/downloads");
   const madeDir = !fs.existsSync(LOCAL_DIR);
   fs.mkdirSync(LOCAL_DIR, { recursive: true });
   const file = path.join(LOCAL_DIR, "Prism-Windows.zip");

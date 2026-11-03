@@ -5,6 +5,9 @@
   "functions": {
     "api/proxy.js": {
       "maxDuration": 60
+    },
+    "api/download.js": {
+      "maxDuration": 60
     }
   },
   "rewrites": [
