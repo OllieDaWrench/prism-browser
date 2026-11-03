@@ -57,6 +57,26 @@
         font-size: 13px;
         color: #cfd6e4;
       }
+      .downloads {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin: 16px 0 10px;
+      }
+      a.download {
+        display: inline-flex;
+        align-items: center;
+        padding: 11px 16px;
+        border-radius: 12px;
+        background: #e2b657;
+        color: #1a1408;
+        font-weight: 700;
+        font-size: 14px;
+        text-decoration: none;
+      }
+      a.download:hover {
+        background: #f0c96a;
+      }
       a.button {
         display: inline-block;
         margin-top: 6px;
@@ -82,9 +102,18 @@
         Opening <code>Prism.html</code> straight from disk cannot work: a browser page loaded from
         <code>file://</code> is not allowed to fetch other websites, so Prism has nothing it can proxy through.
       </p>
-      <p>Start the server, then use it at <code>http://localhost:3000</code>:</p>
-      <pre>npm start</pre>
-      <p>On Windows you can just double-click <code>Open Prism.bat</code>, which starts the server for you.</p>
+      <p>Download the app for your computer, unzip it, and double-click the launcher inside:</p>
+      <div class="downloads">
+        <a class="download" href="https://github.com/OllieDaWrench/prism-browser/releases/latest/download/Prism-macOS.zip">Download for Mac</a>
+        <a class="download" href="https://github.com/OllieDaWrench/prism-browser/releases/latest/download/Prism-Windows.zip">Download for Windows</a>
+      </div>
+      <p>
+        macOS: double-click <code>Open Prism.command</code> (first time, right-click › Open). Windows:
+        double-click <code>Open Prism.bat</code>. Both need Node.js 22+ from
+        <a href="https://nodejs.org/en/download" style="color: #e2b657">nodejs.org</a>, and your browser
+        then opens at <code>http://localhost:3000</code>.
+      </p>
+      <p>Already have the source? Start it with <code>npm start</code>.</p>
       <a class="button" href="http://localhost:3000">Open Prism</a>
       <p class="note" id="note">
         If the button does nothing, the server is not running yet.

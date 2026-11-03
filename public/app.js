@@ -49,6 +49,9 @@ let liveConn = null;
 let liveSession = null; // { url }
 
 const INTERNAL_NAV = /^\/(live|proxy|p|r|ws)(\/|$)/;
+/** Mirror of lib/desktop.js — test/desktop.test.js keeps these in sync. */
+const DOWNLOAD_MAC = "https://github.com/OllieDaWrench/prism-browser/releases/latest/download/Prism-macOS.zip";
+const DOWNLOAD_WINDOWS = "https://github.com/OllieDaWrench/prism-browser/releases/latest/download/Prism-Windows.zip";
 
 /**
  * Sites whose JavaScript cannot survive being re-served from another origin.
@@ -232,7 +235,7 @@ function renderEngine() {
     engineNote.textContent = live.state === "starting"
       ? "Starting the live browser engine…"
       : live.hosted
-        ? "Hosted copy — proxy engine only. Live mode needs the local app."
+        ? "Hosted copy — proxy engine only. Download Prism for Live mode (real browser, Cloudflare-capable)."
         : `Proxy engine only — ${live.reason || "no Chromium browser found"}`;
   } else if (preference === "auto") {
     engineNote.textContent = `Auto engine. Live browser ready (${live.browser}) — pages that need real JavaScript will open there.`;
@@ -276,9 +279,36 @@ function showStage(which) {
   liveView.hidden = which !== "live";
 }
 
+let bannerLink = null;
+
+/**
+ * Banner with an optional "get Prism for your computer" link, used wherever the
+ * hosted copy has to admit that something needs the local app.
+ */
+function showDownloadBanner(text) {
+  showBanner(text, null, null);
+  if (!bannerLink) {
+    bannerLink = document.createElement("a");
+    bannerLink.className = "banner-link";
+    bannerLink.target = "_blank";
+    bannerLink.rel = "noreferrer noopener";
+    bannerLink.textContent = "Download for Mac / Windows";
+    banner.appendChild(bannerLink);
+  }
+  bannerLink.href = DOWNLOAD_MAC;
+  bannerLink.dataset.mac = DOWNLOAD_MAC;
+  bannerLink.dataset.windows = DOWNLOAD_WINDOWS;
+  bannerLink.hidden = false;
+}
+
+function hideBannerLink() {
+  if (bannerLink) bannerLink.hidden = true;
+}
+
 function showBanner(text, actionLabel, action) {
   bannerText.textContent = text;
   banner.hidden = false;
+  hideBannerLink();
   if (actionLabel && action) {
     bannerAction.hidden = false;
     bannerAction.textContent = actionLabel;
@@ -343,11 +373,22 @@ iframe.addEventListener("load", () => {
 /* ------------------------------------------------------------------ *
  * live engine
  * ------------------------------------------------------------------ */
-function showLiveUnavailable() {
+function showLiveUnavailable(context) {
   showStage("live");
   liveOverlay.hidden = false;
-  liveReason.textContent = live.reason || "No Chromium-based browser was found.";
-  liveHint.textContent = live.hint || "";
+  const lead = context ? `${context} ` : "";
+  if (live.hosted) {
+    liveReason.textContent =
+      lead +
+      "This is the hosted copy of Prism. Live mode needs a real browser on your own machine, so it only runs locally — that is also the only way Cloudflare-protected sites load.";
+    liveHint.textContent =
+      "Download Prism, unzip it, and start it with the launcher inside. It uses the Chrome, Edge or Chromium already on your computer.";
+  } else {
+    liveReason.textContent = lead + (live.reason || "No Chromium-based browser was found.");
+    liveHint.textContent = live.hint || "";
+  }
+  document.getElementById("dl-mac").href = DOWNLOAD_MAC;
+  document.getElementById("dl-windows").href = DOWNLOAD_WINDOWS;
 }
 
 document.getElementById("live-fallback").addEventListener("click", () => {
@@ -708,16 +749,17 @@ function onBotWall(vendor, pageUrl) {
   }
 
   showBanner(
-    `${vendor} blocks the proxy engine (it sees a server, not your browser). Live mode on your own machine loads ${host} normally.`,
+    `${vendor} blocks the proxy engine — it sees a server, not your browser. The local app drives your own Chrome, on your own network, and gets through.`,
     "How?",
     () => {
-      showStage("live");
-      liveOverlay.hidden = false;
-      liveReason.textContent = `${vendor} blocks proxy fetches.`;
-      liveHint.textContent =
-        "Run Prism locally (`npm start`, or Open Prism.bat on Windows). Live mode then drives your installed Chrome, on your own network, which gets through this check.";
+      showLiveUnavailable(`${vendor} blocks requests that come from a server.`);
+      if (!live.hosted) {
+        liveHint.textContent =
+          "In the local app, Prism opens this page in Live mode — your own Chrome, your own IP — where the check can actually be passed.";
+      }
     }
   );
+  if (live.hosted) showDownloadBanner(`${vendor} blocks the hosted proxy. Run Prism locally to load ${host}.`);
 }
 
 function onProxyFailure() {
@@ -769,10 +811,14 @@ async function boot() {
   ]);
   renderEngine();
   if (!proxyReachable) {
-    showBanner(
-      "This copy of Prism cannot proxy: the proxy endpoint is not answering. Run it locally with `npm start`.",
-      "Retry",
-      () => boot()
+    showDownloadBanner(
+      "This copy of Prism cannot proxy: the proxy endpoint is not answering. The local app works:"
+    );
+  } else if (live.hosted) {
+    // Hosted copies can proxy, but never drive a browser: make the way out
+    // visible instead of only mentioning it in a card the user has to find.
+    showDownloadBanner(
+      "Hosted copy: proxy engine only. Most sites work; anything needing a real browser (or behind Cloudflare) needs the local app."
     );
   }
 }

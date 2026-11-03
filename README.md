@@ -15,14 +15,37 @@ The engine pill in the toolbar shows what will be used. Click it to cycle **Auto
 In Auto mode Prism uses the proxy for ordinary pages and switches to Live for the sites that need a
 real browser, and if a proxied page fails you get a one-click offer to reopen it in Live.
 
-## Running it
+## Download and run it
+
+Grab the bundle for your computer — both contain the same app, plus a launcher:
+
+| Platform | Download | Start it by |
+| --- | --- | --- |
+| macOS | [Prism-macOS.zip](https://github.com/OllieDaWrench/prism-browser/releases/latest/download/Prism-macOS.zip) | double-click `Open Prism.command` |
+| Windows | [Prism-Windows.zip](https://github.com/OllieDaWrench/prism-browser/releases/latest/download/Prism-Windows.zip) | double-click `Open Prism.bat` |
+| Any (from source) | `git clone` or the repository zip | `npm start` |
+
+Both need **Node.js 22+** installed once from [nodejs.org](https://nodejs.org/en/download). The launcher
+installs Prism's single dependency on first run and opens `http://localhost:3000`.
+
+macOS note: the first launch may be blocked by Gatekeeper — right-click `Open Prism.command` › **Open**,
+or run `chmod +x "Open Prism.command"` once.
+
+From a checkout:
 
 ```bash
 npm install     # express, nothing else
 npm start       # http://localhost:3000
 ```
 
-Windows: double-click **`Open Prism.bat`** — it starts the server and opens the browser for you.
+The bundles are built by `.github/workflows/release.yml` from `scripts/package.sh` on every `v*` tag, so
+those links always point at the newest release.
+
+### Why downloads at all?
+
+Prism has to run on the machine whose browser it drives. The hosted copy can proxy pages, but it cannot
+start Chromium, which is why Live mode — and anything behind Cloudflare — only works in the local app.
+Every place in the UI that says "run Prism locally" links to these downloads.
 
 Requirements: Node 22+ (for the built-in `fetch`/`WebSocket` the live engine speaks CDP with).
 Live mode also needs a Chromium-based browser installed. Prism reuses the Chrome or Edge you already
@@ -43,6 +66,7 @@ If Live mode is unavailable the app says so and runs proxy-only. `GET /live/stat
 | `PRISM_CHROME` | auto-detected | Chromium/Chrome/Edge executable for Live mode |
 | `PRISM_NO_LIVE` | unset | Set to `1` to disable the live engine entirely |
 | `PRISM_HEADLESS` | unset | Set to `0` to run Live mode in a real window instead of headless |
+| `PORT` | `3000` | Port used by the launchers and the server |
 | `PRISM_ALLOW_PRIVATE` | unset | Set to `1` to allow proxying to private/local addresses |
 | `PRISM_UA` | a desktop Chrome UA | User agent sent upstream |
 
@@ -203,6 +227,9 @@ npm test
 `test/shim.test.js` runs the injected shim against a fake DOM.
 `test/integration.test.js` boots the real server against a throwaway origin and checks rewriting,
 cookie scoping, redirects, POSTs, binary streaming, error codes and WebSocket tunnelling.
+`test/desktop.test.js` guards the download links: the URLs in the UI, the bot-wall page and
+`lib/desktop.js` must agree, the launchers must exist and be executable, and the packaging script must
+produce the asset names the links point at.
 `test/botwall.test.js` covers bot-wall detection (Cloudflare challenges, blocks, Turnstile, other
 vendors, and false positives on ordinary pages) plus the in-page probe the live engine uses.
 `test/vercel.test.js` covers the hosted build: the rewrite config, reassembling

@@ -93,8 +93,10 @@ test("the block page explains the situation and tells the UI", () => {
   assert.match(html, /prism-blocked/);
   assert.match(html, /vendor:"Cloudflare"/);
 
+  // without Live mode it hands over the download instead of a terminal command
   const offline = blockPage("Cloudflare", "https://www.reddit.com/", { liveAvailable: false });
-  assert.match(offline, /npm start/);
+  assert.match(offline, /Download for Mac/);
+  assert.match(offline, /releases\/latest\/download\/Prism-macOS\.zip/);
 });
 
 test("the in-page probe recognises a challenge the live browser lands on", () => {
