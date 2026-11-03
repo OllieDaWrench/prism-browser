@@ -240,6 +240,8 @@ test("the start-here note promises no installer and no admin", () => {
   assert.match(script, /START HERE\.txt/);
   assert.match(script, /No installer, no admin rights/);
   assert.match(script, /read-only for normal/);
+  // and it tells a Mac user the one command that avoids the Gatekeeper warning
+  assert.match(script, /curl -fsSL https:\/\/prism-browser\.vercel\.app\/install\.sh \| bash/);
 });
 
 test("a default build ships no runtime and fits the hosted response budget", () => {
@@ -266,6 +268,15 @@ test("a default build ships no runtime and fits the hosted response budget", () 
   const readme = execFileSync("unzip", ["-p", zip, "Prism/START HERE.txt"], { encoding: "utf8" });
   assert.match(readme, /no admin rights/i);
   assert.match(readme, /Node\.js/);
+
+  // The Terminal command must be in the shipped note, spelled out in full, near
+  // the top — that is what the user is told to run.
+  const command = "curl -fsSL https://prism-browser.vercel.app/install.sh | bash";
+  assert.ok(readme.includes(command), "START HERE must name the install command");
+  assert.ok(readme.indexOf(command) < readme.indexOf("Prism unpacks its own copy"), "before the Node note");
+  assert.match(readme, /Terminal/);
+  assert.match(readme, /right-click -> Open/, "the zip path stays documented too");
+  assert.doesNotMatch(readme, /\bsudo\b/);
 
   fs.rmSync(out, { recursive: true, force: true });
 });

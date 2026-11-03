@@ -111,6 +111,13 @@ Prism
 
 No installer, no admin rights, nothing installed on this computer.
 
+macOS: the easiest route is one line in Terminal (Spotlight -> "Terminal"):
+
+    curl -fsSL https://prism-browser.vercel.app/install.sh | bash
+
+That installs Prism to ~/Prism and puts "Prism" on your Desktop, which opens on
+a plain double-click — no "cannot be verified" warning. Details in step 2.
+
 Prism unpacks its own copy of Node.js (the engine it runs on) into this folder
 the first time you start it. That is an ordinary download, roughly 50 MB, and it
 never asks for an administrator password. Because of it the zip you downloaded
@@ -122,11 +129,19 @@ is small — Prism serves the zip itself rather than sending you to a website.
 
 2. Start Prism:
    Windows:  double-click "Open Prism.bat"
-   macOS:    double-click "Open Prism.command"
-             First time only, if macOS refuses to open it:
-             right-click the file -> Open -> Open
-             (that is a normal "downloaded from the internet" prompt, it does
-             not ask for an administrator password)
+   macOS:    paste this into Terminal (Spotlight -> "Terminal"):
+
+               curl -fsSL https://prism-browser.vercel.app/install.sh | bash
+
+             It installs Prism to ~/Prism, keeps your downloaded engine across
+             upgrades, and adds "Prism" to your Desktop — double-click that from
+             then on. No administrator password, and no "cannot be verified"
+             warning: Terminal downloads are never quarantined the way browser
+             ones are.
+
+             Prefer this folder? Double-click "Open Prism.command" instead, and
+             use right-click -> Open the first time (that is Gatekeeper, not an
+             admin prompt).
 
    Prism's own browser window opens at http://localhost:3000.
    The first start takes a moment while it unpacks its engine.
