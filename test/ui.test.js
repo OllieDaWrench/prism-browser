@@ -408,8 +408,40 @@ test("a live-mode challenge points at the checkbox instead of hanging", async ()
   });
   await tick();
 
-  assert.match(window.document.getElementById("banner-text").textContent, /checking this browser/);
-  assert.match(window.document.getElementById("banner-text").textContent, /click it/);
+  const bannerText = window.document.getElementById("banner-text").textContent;
+  assert.match(bannerText, /does not trust the browser Prism started/);
+  assert.match(bannerText, /checkbox/);
+  // and it offers the route that actually works: the user's own browser
+  assert.equal(window.document.getElementById("banner-action").textContent, "Open in my Chrome");
+  dom.window.close();
+});
+
+test("a challenge banner can hand the page to the real browser", async () => {
+  if (!JSDOM) return;
+  const dom = makeUi(true);
+  const { window } = dom;
+  await tick();
+
+  const opened = [];
+  window.fetch = async (url, init) => {
+    opened.push({ url: String(url), body: init && init.body ? JSON.parse(init.body) : null });
+    return { ok: true, json: async () => ({ ok: true }) };
+  };
+
+  submit(window, "#url", "youtube.com");
+  await tick();
+  const socket = FakeWebSocket.instances.find((s) => s.url.includes("/live/ws"));
+  socket.dispatch("message", {
+    data: JSON.stringify({ t: "challenge", vendor: "Cloudflare", url: "https://youtube.com/" }),
+  });
+  await tick();
+
+  window.document.getElementById("banner-action").click();
+  await tick();
+
+  assert.equal(opened.length, 1);
+  assert.equal(opened[0].url, "/open");
+  assert.equal(opened[0].body.url, "https://youtube.com/");
   dom.window.close();
 });
 

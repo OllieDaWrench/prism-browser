@@ -388,10 +388,40 @@ function showLiveUnavailable(context) {
     liveReason.textContent = lead + (live.reason || "No Chromium-based browser was found.");
     liveHint.textContent = live.hint || "";
   }
+  // on a local copy there is a browser to hand the page to, even when Live
+  // cannot drive it
+  const openButton = document.getElementById("open-external");
+  if (openButton) openButton.hidden = live.hosted;
   document.getElementById("dl-mac").href = DOWNLOAD_MAC;
   document.getElementById("dl-windows").href = DOWNLOAD_WINDOWS;
   document.getElementById("modal-dl-mac").href = DOWNLOAD_MAC;
   document.getElementById("modal-dl-windows").href = DOWNLOAD_WINDOWS;
+}
+
+/* ------------------------------------------------------------------ *
+ * "open it in my own browser"
+ *
+ * Live mode drives a Chrome that Prism started, over the DevTools protocol,
+ * with its own profile — and bot protection can tell. When a site challenges
+ * that browser, the one reliable way through is the browser the user actually
+ * browses in. This only exists on the local app; the hosted copy has no desktop
+ * to open anything on.
+ * ------------------------------------------------------------------ */
+async function openInOwnBrowser(url) {
+  const target = url || (stack[index] && stack[index].url) || urlInput.value;
+  if (!target) return false;
+  try {
+    const res = await fetch("/open", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: target }),
+    });
+    if (!res.ok) return false;
+    showBanner(`Opened ${hostOf(target) || target} in your own browser. Prism stays here for everything else.`);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /* ------------------------------------------------------------------ *
@@ -482,6 +512,11 @@ function wireInstallOneLiner() {
 
 wireInstallOneLiner();
 
+const openExternalButton = document.getElementById("open-external");
+if (openExternalButton) {
+  openExternalButton.addEventListener("click", () => openInOwnBrowser());
+}
+
 document.getElementById("live-fallback").addEventListener("click", () => {
   liveOverlay.hidden = true;
   setPreference("proxy");
@@ -571,13 +606,15 @@ function handleLiveMessage(msg) {
         setCurrentUrl(msg.url);
       }
       return;
-    case "challenge":
+    case "challenge": {
+      const vendor = msg.vendor || "Bot protection";
       showBanner(
-        `${msg.vendor || "Bot protection"} is checking this browser. If a checkbox appears, click it — then the page loads normally.`,
-        "Reload",
-        () => liveSend({ t: "reload" })
+        `${vendor} does not trust the browser Prism started. Click the checkbox in the page if one appears — or open this address in your own Chrome, where the check passes.`,
+        "Open in my Chrome",
+        () => openInOwnBrowser(msg.url)
       );
       return;
+    }
     case "popup":
       if (msg.url) showBanner(`This site tried to open a popup: ${msg.url}`, "Open here", () => navigate(msg.url));
       return;
@@ -833,9 +870,14 @@ function onBotWall(vendor, pageUrl) {
   }
 
   if (liveUsable()) {
-    showBanner(`${vendor} is still checking this page. Click the checkbox in the page, or reload.`, "Reload", () => {
-      reloadBtn.click();
-    });
+    // Live was tried for this page and the wall is still there. Live runs a
+    // Chrome that Prism started over the DevTools protocol, which bot
+    // protection can recognise; the dependable route is the user's own browser.
+    showBanner(
+      `${vendor} is blocking the browser Prism started. Open the address in your own Chrome and the check passes.`,
+      "Open in my Chrome",
+      () => openInOwnBrowser(key)
+    );
     return;
   }
 
