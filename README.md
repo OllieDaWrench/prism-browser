@@ -121,6 +121,49 @@ If Live mode is unavailable the app says so and runs proxy-only. `GET /live/stat
 | `PORT` | `3000` | Port used by the launchers and the server |
 | `PRISM_ALLOW_PRIVATE` | unset | Set to `1` to allow proxying to private/local addresses |
 | `PRISM_UA` | the browser's own UA | Overrides the user agent (leave alone — see below) |
+| `PRISM_AUTH_SECRET` | unset | 16+ random characters. Turns sign-in on; without it the site stays public |
+| `PRISM_AUTH` | unset | `1` requires sign-in locally too, `0` switches the gate off |
+| `PRISM_USERS` | unset | A starting list, `[{"number":"482913","password":"...","role":"admin"}]` |
+| `KV_REST_API_URL` / `KV_REST_API_TOKEN` | unset | Upstash REST — where accounts live once connected |
+| `PRISM_USERS_FILE` | `data/users.json` | Where accounts go when there is no Upstash |
+
+### Accounts (who is allowed in)
+
+Prism can be a private site: a **six-digit number and a password** in front of the app and the
+download. The number is only a sign-in name — nothing is ever sent to it, so there is no SMS
+and no phone bill.
+
+**Where the list lives, in order of preference:**
+
+1. **Upstash** (`KV_REST_API_URL` + `KV_REST_API_TOKEN`). This is the real option on Vercel:
+   accounts survive deploys and every request sees the same list. In Vercel, Storage →
+   Marketplace → Upstash Redis adds both variables for you.
+2. **`PRISM_USERS`**, a JSON variable. Read-only, useful as the very first account or as a seed
+   for an empty database.
+3. **`data/users.json`**. Fine on your own computer; a hosted function's disk is thrown away,
+   so `/admin` refuses to save there and says why.
+
+**Making the first account.** The console needs somebody to sign in as, so the first one comes
+from a terminal (or from `PRISM_USERS`):
+
+```bash
+node scripts/add-user.js 482913 "a long password" --name You --admin
+```
+
+After that **`/admin`** adds people (number, name, password, whether they can manage access),
+switches them off, changes passwords and removes them. Only a manager can change access, and the
+last manager cannot be removed or switched off, so the console cannot be locked out.
+
+**How the secrets travel.** Passwords are stored only as `scrypt` hashes with a per-account salt.
+Sign-in cookies are signed (`PRISM_AUTH_SECRET`), last 30 days, and are `HttpOnly`,
+`SameSite=Lax`, `Secure` on https. Install tokens last 15 minutes and unlock the download only —
+a token is never a session, and a session is never a token.
+
+**The installer** asks for the number and password on the terminal, exchanges them for that
+short-lived token, and only then downloads. The password never reaches a URL, a log or the shell
+history. A copy with no `PRISM_AUTH_SECRET` is not gated, and the installer skips the prompt.
+
+**The installed app does not ask you to sign in.** It runs on your own computer.
 
 ## Deploying to Vercel (and why the hosted copy is proxy-only)
 

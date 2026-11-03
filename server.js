@@ -11,6 +11,10 @@ const { LiveBrowser, LiveSession } = require("./lib/live");
 const { handleDownload } = require("./lib/downloads");
 const { installerScript } = require("./lib/installer");
 const { openExternal } = require("./lib/opener");
+const auth = require("./lib/auth");
+const users = require("./lib/users");
+const gate = require("./lib/gate");
+const { readBody } = require("./lib/body");
 
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || "0.0.0.0";
@@ -20,7 +24,20 @@ const server = http.createServer(app);
 const browser = new LiveBrowser();
 
 app.disable("x-powered-by");
-app.use(express.static(path.join(__dirname, "public"), { extensions: ["html"] }));
+
+/* Optional sign-in for the app itself (PRISM_AUTH=1). Off by default: this is
+ * your own machine. The account endpoints stay reachable either way, so /admin
+ * works without turning the gate on. */
+app.use((req, res, next) => {
+  if (!gate.enabled()) return next();
+  const route = String(req.path || "/");
+  if (route.startsWith("/api/") || route.startsWith("/live/") || route === "/healthz") return next();
+  if (["/login", "/admin", "/gate.html", "/favicon.svg", "/install.sh", "/install"].includes(route)) return next();
+  if (/^\/(download|open)(\/|$)/.test(route)) return next();
+  if (gate.sessionFrom(req)) return next();
+  if (String(req.headers.accept || "").includes("text/html")) return res.redirect(302, "/login");
+  return res.status(401).json({ ok: false, error: "Sign in first." });
+});
 
 /* ---------------- live engine ---------------- */
 
@@ -30,7 +47,127 @@ app.get("/live/status", async (req, res) => {
   res.json({ ...browser.status(), hosted: false, proxyMode: "path" });
 });
 
+/* ---------------- accounts ---------------- */
+/* The same sign-in and account console as the hosted copy, so /admin works on
+ * this machine too. Sign-in for the app itself is off by default here — it is
+ * your own computer — and PRISM_AUTH=1 turns it on. */
+
+app.get("/login", (req, res) => {
+  if (gate.sessionFrom(req)) return res.redirect(302, "/");
+  gate.serveGate(res);
+});
+
+app.get("/admin", (req, res) => {
+  if (gate.enabled() && !gate.sessionFrom(req)) return res.redirect(302, "/login");
+  res.sendFile(path.join(__dirname, "public", "admin.html"));
+});
+
+app.get("/api/auth/status", async (req, res) => {
+  const session = gate.sessionFrom(req);
+  let needsSetup = false;
+  try {
+    needsSetup = await users.needsSetup();
+  } catch {}
+  res.setHeader("Cache-Control", "no-store");
+  res.json({
+    ok: true,
+    authenticated: Boolean(session),
+    number: session ? session.number : null,
+    admin: session ? session.role === "admin" : false,
+    needsSetup,
+    configured: Boolean(auth.secret()),
+    storage: users.storageMode(),
+    canWrite: users.canWrite(),
+  });
+});
+
+app.post("/api/auth/login", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!auth.secret()) return res.status(500).json({ ok: false, error: "Set PRISM_AUTH_SECRET to use sign-in." });
+
+  const body = await readBody(req);
+  const result = await users.verifyCredentials(body.number || body.phone, body.password);
+  if (!result.ok) return res.status(401).json({ ok: false, error: result.reason });
+
+  // Local http has no TLS, so the cookie cannot be Secure here or it is dropped.
+  res.setHeader("Set-Cookie", auth.cookieHeader(auth.createSession(result.user), { secure: false }));
+  res.json({ ok: true, number: result.user.number, admin: result.user.role === "admin" });
+});
+
+app.post("/api/auth/logout", (req, res) => {
+  res.setHeader("Set-Cookie", auth.clearCookieHeader());
+  res.json({ ok: true });
+});
+
+app.post("/api/auth/token", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!auth.secret()) return res.status(500).json({ ok: false, error: "Set PRISM_AUTH_SECRET." });
+
+  const body = await readBody(req);
+  const result = await users.verifyCredentials(body.number || body.phone, body.password);
+  if (!result.ok) return res.status(401).json({ ok: false, error: result.reason });
+  res.json({ ok: true, token: auth.createInstallToken(result.user) });
+});
+
+app.get("/api/auth/users", async (req, res) => {
+  const session = gate.sessionFrom(req);
+  if (!session) return res.status(401).json({ ok: false, error: "Please sign in first." });
+
+  const list = await users.listUsers();
+  res.setHeader("Cache-Control", "no-store");
+  res.json({
+    ok: true,
+    me: session.number,
+    storage: users.storageMode(),
+    canWrite: users.canWrite(),
+    users: list.map(users.publicUser),
+  });
+});
+
+app.post("/api/auth/users", async (req, res) => {
+  const session = gate.sessionFrom(req);
+  if (!session) return res.status(401).json({ ok: false, error: "Please sign in first." });
+  if (session.role !== "admin") {
+    return res.status(403).json({ ok: false, error: "Only the account owner can change access." });
+  }
+  if (!users.canWrite()) {
+    return res.status(409).json({ ok: false, error: "This copy has nowhere permanent to save accounts." });
+  }
+
+  const body = await readBody(req);
+  const action = String(body.action || "").toLowerCase();
+  const number = body.number || body.phone;
+
+  try {
+    if (action === "add") {
+      const user = await users.addUser({ number, password: body.password, name: body.name, role: body.role });
+      return res.json({ ok: true, user });
+    }
+    if (action === "update") {
+      const user = await users.updateUser(number, {
+        password: body.password,
+        active: body.active,
+        name: body.name,
+        role: body.role,
+      });
+      return res.json({ ok: true, user });
+    }
+    if (action === "remove") {
+      await users.removeUser(number);
+      return res.json({ ok: true });
+    }
+    res.status(400).json({ ok: false, error: "Unknown action." });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
 app.all("/download/:platform", (req, res) => {
+  // Same rule as the hosted copy: a sign-in cookie or the installer's token.
+  if (!gate.downloadAllowed(req).ok) {
+    res.status(401).setHeader("Content-Type", "text/plain; charset=utf-8");
+    return res.end("Sign in first, then download again.");
+  }
   handleDownload(req, res, req.params.platform).catch(() => {
     if (!res.headersSent) res.status(502).end();
   });
@@ -100,6 +237,12 @@ app.all(proxyRoute, (req, res) => {
 app.get("/healthz", (req, res) =>
   res.json({ ok: true, prism: true, version: require("./package.json").version, uptime: process.uptime() })
 );
+
+/**
+ * Static files are served after every route, so a page like /admin wins over a
+ * file that happens to share its name.
+ */
+app.use(express.static(path.join(__dirname, "public"), { extensions: ["html"] }));
 
 /**
  * Safety net for pages that navigate by script (`location = "/settings"`).

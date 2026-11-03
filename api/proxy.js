@@ -18,6 +18,7 @@
  */
 
 const { handleProxy, errorPage, MODE_QUERY } = require("../lib/proxy");
+const gate = require("../lib/gate");
 
 /** Turn a rewritten request url back into the url the proxy expects. */
 function rebuildUrl(rawUrl) {
@@ -38,6 +39,11 @@ function rebuildUrl(rawUrl) {
 
 module.exports = async function handler(req, res) {
   const original = req.url || "/";
+
+  // This function also serves the app itself through the catch-all rewrite, so
+  // the gate lives here: every page and every proxied address passes it.
+  if (!gate.check(req, res)) return;
+
   req.url = rebuildUrl(original);
 
   // No target at all: answer with Prism's own error page rather than letting

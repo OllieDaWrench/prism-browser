@@ -5,7 +5,10 @@
  * The live engine keeps a Chromium process and a websocket alive, which needs
  * a long-running Node process — that only exists when Prism runs locally.
  */
+const gate = require("../lib/gate");
+
 module.exports = function handler(req, res) {
+  if (!gate.check(req, res)) return;
   res.setHeader("Content-Type", "application/json");
   res.setHeader("Cache-Control", "no-store");
   res.end(
