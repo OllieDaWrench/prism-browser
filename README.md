@@ -166,6 +166,7 @@ history. A copy with no `PRISM_AUTH_SECRET` is not gated, and the installer skip
 `vercel.json` routes every shape of request at a single function:
 
 ```
+/ and /index.html                -> /api/auth/home (login first unless signed in)
 /api/:path*                      -> identity, so functions short-circuit the catch-all
 /live/status                     -> /api/live
 /https/:path*                    -> /api/proxy?__path=https/:path*
