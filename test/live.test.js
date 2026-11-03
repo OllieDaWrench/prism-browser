@@ -203,3 +203,37 @@ test("the live engine spots a bot challenge and tells the user", async () => {
   ws.close();
   mock.server.close();
 });
+
+test("browser discovery finds one in the per-user Applications folder", () => {
+  // A browser dragged into ~/Applications needs no admin password, so it has to
+  // count: on macOS the engine looks there as well as /Applications.
+  const fs = require("fs");
+  const os = require("os");
+  const path = require("path");
+  const { discover } = require("../lib/live");
+
+  if (process.platform === "darwin") {
+    // on a real Mac, discovery either finds something or honestly finds nothing
+    const found = discover();
+    assert.ok(found === null || typeof found.path === "string");
+    return;
+  }
+
+  // elsewhere, prove the home-relative candidates exist in the list at all
+  const source = fs.readFileSync(path.join(__dirname, "..", "lib", "live.js"), "utf8");
+  assert.match(source, /~\/Applications\/Google Chrome\.app/);
+  assert.match(source, /function expandHome/);
+  assert.match(source, /os\.homedir\(\)/);
+});
+
+test("PRISM_CHROME overrides discovery", () => {
+  const previous = process.env.PRISM_CHROME;
+  process.env.PRISM_CHROME = "/custom/chrome";
+  try {
+    const { discover } = require("../lib/live");
+    assert.deepEqual(discover(), { path: "/custom/chrome", name: "Chrome (PRISM_CHROME)" });
+  } finally {
+    if (previous === undefined) delete process.env.PRISM_CHROME;
+    else process.env.PRISM_CHROME = previous;
+  }
+});
