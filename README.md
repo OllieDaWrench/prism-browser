@@ -110,7 +110,10 @@ The public homepage has no sign-in form. **Web Browser** opens `/app`; the hoste
 browser only to administrators and shows an under-construction page to everyone else. **Apps** is an
 under-construction destination, **Games** is disabled, and **Feedback** opens a short in-app form.
 Feedback is stored privately using the configured Vercel Blob store; a local run writes to
-`data/feedback.jsonl`. Admin sign-in remains available at `/login`.
+`data/feedback.jsonl`. Admin sign-in remains available at `/login`. The Apps catalog includes Prism,
+GitHub Desktop, VirtualBox and Tor Browser for macOS and Windows. Prism's own bundles are served by
+Prism; for large third-party installers the Prism download route redirects directly to the official
+file (not a product page), because Vercel Functions cannot proxy files of that size.
 
 ### Why downloads at all?
 

@@ -119,6 +119,14 @@ test("serves the public homepage and keeps the browser shell on /app", async () 
   assert.match(shell, /live/);
 });
 
+test("third-party app links redirect directly to an official installer file", async () => {
+  const res = await fetch(prism + "/download/app/github-desktop/windows", { redirect: "manual" });
+  assert.equal(res.status, 302);
+  assert.equal(res.headers.get("location"), "https://github.com/desktop/desktop/releases/latest/download/GitHubDesktopSetup-x64.exe");
+  assert.equal(res.headers.get("referrer-policy"), "no-referrer");
+  assert.match(res.headers.get("cache-control") || "", /no-store/);
+});
+
 test("local feedback submissions are written to the configured feedback file", async (t) => {
   const fs = require("fs");
   const os = require("os");
