@@ -379,3 +379,14 @@ test("no user agent is invented when the browser will not say who it is", async 
   ws.close();
   mock.server.close();
 });
+
+
+test("Chromium's DevTools endpoint is local and permits Prism's websocket attach", () => {
+  const fs = require("fs");
+  const path = require("path");
+  const source = fs.readFileSync(path.join(__dirname, "..", "lib", "live.js"), "utf8");
+
+  assert.match(source, /--remote-debugging-address=127\.0\.0\.1/);
+  assert.match(source, /--remote-allow-origins=\*/);
+  assert.match(source, /attempt < 5/, "connection retries brief Chrome startup races");
+});
