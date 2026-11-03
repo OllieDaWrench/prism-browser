@@ -119,3 +119,32 @@ test("the in-page probe recognises a challenge the live browser lands on", () =>
   assert.equal(run("Example Domain", "This domain is for use in examples.", "https://example.com/"), "");
   assert.equal(run("", "", "https://example.com/"), "");
 });
+
+test("the block page never promises Live mode when no browser was found", () => {
+  // This is the case that leaves someone stuck: a wall page that says "Prism is
+  // switching to Live mode" on a machine where Live cannot start at all.
+  const page = blockPage("Cloudflare", "https://www.youtube.com/", {
+    liveAvailable: false,
+    liveReason: "No Chrome, Edge or Chromium installation was found.",
+    bundled: true,
+  });
+  assert.doesNotMatch(page, /switching this page to/);
+  assert.match(page, /No Chrome, Edge or Chromium installation was found/);
+  assert.match(page, /Live mode is not available right now/);
+  // and it does not try to sell the app to someone already running it
+  assert.doesNotMatch(page, /href="\/download\/mac"/);
+});
+
+test("a hosted copy still points at the download when Live is impossible", () => {
+  const page = blockPage("Cloudflare", "https://www.youtube.com/", {
+    liveAvailable: false,
+    bundled: false,
+  });
+  assert.match(page, /Get the local app/);
+  assert.match(page, /href="\/download\/mac"/);
+});
+
+test("with a browser available it escalates instead of explaining", () => {
+  const page = blockPage("Cloudflare", "https://www.youtube.com/", { liveAvailable: true });
+  assert.match(page, /switching this page to <strong>Live mode<\/strong>/);
+});

@@ -59,7 +59,14 @@ const proxyRoute = ["/proxy", "/api/proxy", "/https/*", "/http/*", "/p/*", "/r/*
 
 app.all(proxyRoute, (req, res) => {
   const started = Date.now();
-  handleProxy(req, res).catch((err) => {
+  // The block page must not promise Live mode when this machine has no browser
+  // Prism can drive: ask for the engine's state before writing that page.
+  const liveState = browser.status();
+  handleProxy(req, res, {
+    liveAvailable: liveState.available,
+    liveReason: liveState.reason,
+    bundled: true,
+  }).catch((err) => {
     console.error("[proxy]", req.method, req.originalUrl, err && err.message);
     if (!res.headersSent) {
       res.status(502).setHeader("Content-Type", "text/html; charset=utf-8");
