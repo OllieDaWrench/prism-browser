@@ -9,6 +9,7 @@ const { handleProxy, tunnelWebSocket, errorPage, targetFromLocal, proxyPath } = 
 const { upgrade: wsUpgrade } = require("./lib/ws");
 const { LiveBrowser, LiveSession } = require("./lib/live");
 const { handleDownload } = require("./lib/downloads");
+const { installerScript } = require("./lib/installer");
 
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || "0.0.0.0";
@@ -35,6 +36,17 @@ app.all("/download/:platform", (req, res) => {
 });
 
 app.get("/download", (req, res) => res.redirect(302, "/download/mac"));
+
+/* The macOS one-liner. A script fetched by curl is never quarantined, so this
+ * is the only way to hand someone a launcher that opens without Gatekeeper
+ * objecting — see lib/installer.js. */
+app.get(["/install.sh", "/install"], (req, res) => {
+  const origin = `${req.protocol}://${req.get("host")}`;
+  res.setHeader("Content-Type", "text/plain; charset=utf-8");
+  res.setHeader("Content-Disposition", "inline; filename=\"install.sh\"");
+  res.setHeader("Cache-Control", "no-store");
+  res.send(installerScript(origin));
+});
 
 app.post("/live/warm", async (req, res) => {
   if (browser.state === "idle") browser.start();

@@ -158,9 +158,18 @@ jobs:
           system-wide, nothing is written outside that folder, and no step asks for
           an admin password.
 
-          * **macOS** — `Prism-macOS.zip` → double-click `Open Prism.command`
-            (Apple Silicon and Intel both work). First launch after downloading:
-            right-click › Open. That is Gatekeeper, not an admin prompt.
+          * **macOS** — one line in Terminal, which skips the "cannot be verified"
+            warning entirely (a `.command` script cannot be code-signed, and macOS
+            quarantines browser downloads):
+
+            ```
+            curl -fsSL https://prism-browser.vercel.app/install.sh | bash
+            ```
+
+            It installs to `~/Prism` and leaves a launcher on your Desktop that
+            opens on a plain double-click. Prefer the zip? `Prism-macOS.zip` →
+            double-click `Open Prism.command` and use right-click › Open the first
+            time; Apple Silicon and Intel both work.
           * **Windows** — `Prism-Windows.zip` → double-click `Open Prism.bat`.
             If SmartScreen appears: More info › Run anyway. Also not an admin prompt.
 

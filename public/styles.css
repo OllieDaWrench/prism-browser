@@ -406,6 +406,64 @@ main {
   color: #cfd6e4;
 }
 
+/* the macOS one-liner: the only route that opens with no Gatekeeper prompt */
+.terminal {
+  margin: 0 0 14px;
+  border: 1px solid #232a36;
+  border-radius: 12px;
+  background: #0d1016;
+  padding: 12px 14px;
+}
+
+.terminal p {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  color: #7d8798;
+  line-height: 1.55;
+}
+
+.terminal-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.terminal code {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12.5px;
+  color: #cfd6e4;
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+
+.copy-button {
+  flex: 0 0 auto;
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid #2c3340;
+  background: #161b24;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.copy-button:hover {
+  color: #e8e6e1;
+  border-color: #3a4352;
+}
+
+.copy-button.copied {
+  color: var(--gold);
+  border-color: var(--gold);
+}
+
 .ghost-button {
   background: transparent !important;
   color: var(--muted) !important;

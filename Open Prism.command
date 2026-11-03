@@ -8,9 +8,13 @@
 #   * listens on an unprivileged port (3000 and up) and stores no state outside
 #     this folder or the temp directory
 #
-# First launch after downloading: macOS may refuse the file once
-# ("cannot be opened because it is from an unidentified developer").
-# Right-click -> Open -> Open. That is a Gatekeeper prompt, not an admin one.
+# If macOS says it "cannot verify" this file, that is Gatekeeper reacting to the
+# quarantine flag a browser puts on downloads; a shell script cannot be
+# code-signed, so the fix is to install without that flag. Run in Terminal:
+#
+#   curl -fsSL <where you got Prism>/install.sh | bash
+#
+# which installs to ~/Prism and leaves a launcher that opens on a double-click.
 
 cd "$(dirname "$0")" || exit 1
 BUNDLE_DIR="$(pwd)"
