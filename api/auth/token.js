@@ -27,7 +27,7 @@ module.exports = async function handler(req, res) {
   }
 
   const body = await readBody(req);
-  const result = await users.verifyCredentials(body.number || body.phone, body.password);
+  const result = await users.verifyCredentials(body.number, body.password);
   if (!result.ok) {
     res.statusCode = 401;
     return res.end(JSON.stringify({ ok: false, error: result.reason }));

@@ -8,5 +8,5 @@ dist/
 # the live browser's profile (cookies, bot-check clearance)
 .chrome-profile/
 
-# accounts, when they are kept in a file instead of Upstash
+# accounts, when they are kept in a file instead of Vercel Blob
 data/users.json

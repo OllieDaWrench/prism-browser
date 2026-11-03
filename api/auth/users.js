@@ -50,13 +50,13 @@ module.exports = async function handler(req, res) {
       error:
         users.storageMode() === "env"
           ? "Accounts come from the PRISM_USERS variable, which cannot be edited here."
-          : "This copy has nowhere permanent to save accounts. Connect Upstash first.",
+          : "This copy has nowhere permanent to save accounts. Connect Vercel Blob first.",
     });
   }
 
   const body = await readBody(req);
   const action = String(body.action || "").toLowerCase();
-  const number = body.number || body.phone;
+  const number = body.number;
 
   try {
     if (action === "add") {

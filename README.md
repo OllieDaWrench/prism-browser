@@ -124,24 +124,20 @@ If Live mode is unavailable the app says so and runs proxy-only. `GET /live/stat
 | `PRISM_AUTH_SECRET` | unset | 16+ random characters. Turns sign-in on; without it the site stays public |
 | `PRISM_AUTH` | unset | `1` requires sign-in locally too, `0` switches the gate off |
 | `PRISM_USERS` | unset | A starting list, `[{"number":"482913","password":"...","role":"admin"}]` |
-| `KV_REST_API_URL` / `KV_REST_API_TOKEN` | unset | Upstash REST — where accounts live once connected |
-| `PRISM_USERS_FILE` | `data/users.json` | Where accounts go when there is no Upstash |
+| `BLOB_READ_WRITE_TOKEN` | unset | Vercel Blob — private account storage, added when you connect a Blob store |
+| `PRISM_USERS_FILE` | `data/users.json` | Where accounts go when there is no Blob store |
 
 ### Accounts (who is allowed in)
 
 Prism can be a private site: a **six-digit number and a password** in front of the app and the
-download. The number is only a sign-in name — nothing is ever sent to it, so there is no SMS
-and no phone bill.
+download. The number is only a sign-in name; nothing is ever sent to it.
 
 **Where the list lives, in order of preference:**
 
-1. **Upstash** (`KV_REST_API_URL` + `KV_REST_API_TOKEN`). This is the real option on Vercel:
-   accounts survive deploys and every request sees the same list. In Vercel, Storage →
-   Marketplace → Upstash Redis adds both variables for you.
-2. **`PRISM_USERS`**, a JSON variable. Read-only, useful as the very first account or as a seed
-   for an empty database.
-3. **`data/users.json`**. Fine on your own computer; a hosted function's disk is thrown away,
-   so `/admin` refuses to save there and says why.
+1. **Private Vercel Blob** (`BLOB_READ_WRITE_TOKEN`). In Vercel, open **Storage → Create → Blob Store**, create a store, then connect it to this project. Vercel adds the token to the project environment. Accounts survive deploys and every request reads the same private JSON object; the object is not publicly accessible.
+2. **`PRISM_USERS`**, a JSON variable. Read-only, useful as the first account or as a seed for an empty Blob store.
+3. **`data/users.json`**. Fine on your own computer; a hosted function's disk is thrown away, so `/admin` refuses to save there and says why.
+
 
 **Making the first account.** The console needs somebody to sign in as, so the first one comes
 from a terminal (or from `PRISM_USERS`):
