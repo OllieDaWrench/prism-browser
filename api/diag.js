@@ -15,6 +15,19 @@ module.exports = async function handler(req, res) {
     return res.end("hello");
   }
 
+  if (mode === "bin-as-text") {
+    // same bytes as zip-small, but declared as text: separates "binary body"
+    // from "application/zip content type" as the cause
+    const r = await fetch(releaseUrl(assetFor("mac")), {
+      redirect: "follow",
+      headers: { accept: "application/octet-stream" },
+    });
+    const buf = Buffer.from(await r.arrayBuffer()).subarray(0, 64);
+    res.status(200);
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    return res.end(buf);
+  }
+
   if (mode === "zip-small" || mode === "zip-full") {
     const r = await fetch(releaseUrl(assetFor("mac")), {
       redirect: "follow",
