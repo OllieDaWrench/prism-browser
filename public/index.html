@@ -62,6 +62,11 @@
             <button type="button" data-go="https://www.youtube.com/">YouTube</button>
           </div>
           <p class="engine-note" id="engine-note"></p>
+          <p class="get-prism">
+            <button type="button" class="link-button" data-download-open>
+              Get Prism for Mac or Windows — one command, or the zip
+            </button>
+          </p>
         </section>
         <iframe
           id="view"
@@ -86,38 +91,68 @@
               <p id="live-reason"></p>
               <p class="hint" id="live-hint"></p>
               <div class="downloads">
-                <a class="download" id="dl-mac" href="/download/mac" download>
+                <a class="download" id="dl-mac" href="/download/mac" download data-download-open>
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11" /><path d="m7.5 10.5 4.5 4.5 4.5-4.5" /><path d="M4 20h16" /></svg>
                   Download for Mac
                 </a>
-                <a class="download" id="dl-windows" href="/download/windows" download>
+                <a class="download" id="dl-windows" href="/download/windows" download data-download-open>
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11" /><path d="m7.5 10.5 4.5 4.5 4.5-4.5" /><path d="M4 20h16" /></svg>
                   Download for Windows
                 </a>
               </div>
               <p class="requires">
-                No installer, no admin rights, nothing installed system-wide: unzip it and double-click
-                <code>Open Prism.command</code> on Mac or <code>Open Prism.bat</code> on Windows. The first start
-                unpacks its own copy of Node.js into that same folder — no administrator password.
+                Click either button for the Terminal command, or for the zip. No installer, no admin rights,
+                nothing installed system-wide.
               </p>
-              <div class="terminal">
-                <p>
-                  <strong>Mac, and don't want the "cannot be verified" warning?</strong> Paste this into Terminal.
-                  Files fetched this way are never quarantined, so the launcher opens with a plain double-click —
-                  no developer account involved.
-                </p>
-                <div class="terminal-row">
-                  <code id="install-cmd">curl -fsSL /install.sh | bash</code>
-                  <button type="button" class="copy-button" id="copy-install" data-copy="install-cmd">Copy</button>
-                </div>
-              </div>
               <button type="button" id="live-fallback" class="ghost-button">Stay in proxy mode</button>
             </div>
           </div>
         </div>
       </main>
     </div>
-    <div id="ver">2.5.1</div>
+    <div id="download-modal" class="modal" hidden>
+      <div class="modal-backdrop" data-download-close></div>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="download-title">
+        <button type="button" class="modal-close" id="download-close" aria-label="Close" data-download-close>✕</button>
+        <h2 id="download-title">Get Prism on this computer</h2>
+        <p class="modal-lead">
+          Prism runs on your own computer, so it can drive the Chrome, Edge or Chromium already there —
+          that is what makes Live mode, and Cloudflare-protected sites, work.
+        </p>
+
+        <div class="modal-option">
+          <p class="option-title">macOS — recommended: one command, no "cannot be verified" warning</p>
+          <p class="option-note">
+            Paste this into Terminal (Spotlight → <em>Terminal</em>). It installs Prism to <code>~/Prism</code>,
+            puts a launcher on your Desktop, and never asks for an administrator password.
+          </p>
+          <div class="terminal-row">
+            <code id="install-cmd">curl -fsSL /install.sh | bash</code>
+            <button type="button" class="copy-button" id="copy-install" data-copy="install-cmd">Copy</button>
+          </div>
+        </div>
+
+        <div class="modal-option">
+          <p class="option-title">Or download the zip</p>
+          <div class="downloads">
+            <a class="download" id="modal-dl-mac" href="/download/mac" download>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11" /><path d="m7.5 10.5 4.5 4.5 4.5-4.5" /><path d="M4 20h16" /></svg>
+              Prism-macOS.zip
+            </a>
+            <a class="download" id="modal-dl-windows" href="/download/windows" download>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11" /><path d="m7.5 10.5 4.5 4.5 4.5-4.5" /><path d="M4 20h16" /></svg>
+              Prism-Windows.zip
+            </a>
+          </div>
+          <p class="requires">
+            Unzip, then double-click <code>Open Prism.command</code> (Mac: right-click → <em>Open</em> the first
+            time) or <code>Open Prism.bat</code>. The first start unpacks Prism's own Node.js into that same
+            folder. Delete the folder to remove Prism.
+          </p>
+        </div>
+      </div>
+    </div>
+    <div id="ver">2.5.2</div>
     <script src="/app.js"></script>
   </body>
 </html>

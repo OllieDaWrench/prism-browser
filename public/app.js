@@ -291,6 +291,8 @@ function showDownloadBanner(text) {
     bannerLink = document.createElement("a");
     bannerLink.className = "banner-link";
     bannerLink.setAttribute("download", "");
+    // opens the download pop-up (the href stays as a no-JS fallback)
+    bannerLink.setAttribute("data-download-open", "");
     bannerLink.textContent = "Download for Mac / Windows";
     banner.appendChild(bannerLink);
   }
@@ -388,7 +390,63 @@ function showLiveUnavailable(context) {
   }
   document.getElementById("dl-mac").href = DOWNLOAD_MAC;
   document.getElementById("dl-windows").href = DOWNLOAD_WINDOWS;
+  document.getElementById("modal-dl-mac").href = DOWNLOAD_MAC;
+  document.getElementById("modal-dl-windows").href = DOWNLOAD_WINDOWS;
 }
+
+/* ------------------------------------------------------------------ *
+ * download pop-up
+ *
+ * Every "Download" button opens one panel that shows both ways to get the
+ * app: the macOS Terminal command (no Gatekeeper warning) and the zip files.
+ * The buttons keep real hrefs, so without JavaScript they still download.
+ * ------------------------------------------------------------------ */
+const downloadModal = document.getElementById("download-modal");
+let downloadTrigger = null;
+
+function openDownloadModal(trigger) {
+  if (!downloadModal) return;
+  downloadTrigger = trigger || document.activeElement;
+  downloadModal.hidden = false;
+  document.body.classList.add("modal-open");
+  const target = downloadModal.querySelector(".copy-button");
+  if (target) target.focus({ preventScroll: true });
+}
+
+function closeDownloadModal() {
+  if (!downloadModal || downloadModal.hidden) return;
+  downloadModal.hidden = true;
+  document.body.classList.remove("modal-open");
+  if (downloadTrigger && typeof downloadTrigger.focus === "function") {
+    downloadTrigger.focus({ preventScroll: true });
+  }
+  // never leave focus stranded inside a hidden panel
+  if (document.activeElement && downloadModal.contains(document.activeElement)) {
+    document.activeElement.blur();
+  }
+  downloadTrigger = null;
+}
+
+document.addEventListener("click", (event) => {
+  const opener = event.target.closest("[data-download-open]");
+  if (opener) {
+    // the zip is still one click away inside the pop-up
+    event.preventDefault();
+    openDownloadModal(opener);
+    return;
+  }
+  if (event.target.closest("[data-download-close]")) {
+    event.preventDefault();
+    closeDownloadModal();
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && downloadModal && !downloadModal.hidden) {
+    event.preventDefault();
+    closeDownloadModal();
+  }
+});
 
 /* The macOS one-liner has to be copy-pasteable, so it carries this origin. */
 const INSTALL_CMD = `curl -fsSL ${location.origin}/install.sh | bash`;
