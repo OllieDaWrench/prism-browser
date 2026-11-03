@@ -22,8 +22,9 @@ real browser, and if a proxied page fails you get a one-click offer to reopen it
 | macOS (Apple Silicon + Intel) | `curl -fsSL https://prism-browser.vercel.app/install.sh \| bash` — or [Prism-macOS.zip](https://github.com/OllieDaWrench/prism-browser/releases/latest/download/Prism-macOS.zip) |
 | Windows (x64) | [Prism-Windows.zip](https://github.com/OllieDaWrench/prism-browser/releases/latest/download/Prism-Windows.zip) |
 
-In the app those buttons are same-origin — `/download/mac` and `/download/windows` — and Prism
-streams the zip itself with `Content-Disposition: attachment`. Clicking downloads the file; nothing
+Clicking any **Download** button in the app opens one panel that shows both routes: the macOS
+Terminal command (the warning-free one) and the two zip files. The zip links are same-origin —
+`/download/mac` and `/download/windows` — and Prism streams the file itself with `Content-Disposition: attachment`. Clicking downloads the file; nothing
 navigates to GitHub, no new tab, no "release page". (The GitHub links above are the fallback, and
 they are what the hosted copy proxies from.)
 

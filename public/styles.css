@@ -406,6 +406,143 @@ main {
   color: #cfd6e4;
 }
 
+/* ---------- download pop-up ---------- */
+
+body.modal-open {
+  overflow: hidden;
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.modal[hidden] {
+  display: none;
+}
+
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(6, 8, 12, 0.72);
+  backdrop-filter: blur(2px);
+}
+
+.modal-card {
+  position: relative;
+  width: min(560px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  padding: 24px 26px 22px;
+  border: 1px solid #2c3340;
+  border-radius: 18px;
+  background: #161b24;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+}
+
+.modal-card h2 {
+  margin: 0 34px 8px 0;
+  font-size: 18px;
+  color: #e8e6e1;
+}
+
+.modal-lead {
+  margin: 0 0 18px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #8d97a8;
+}
+
+.modal-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid #2c3340;
+  background: #1b212b;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.modal-close:hover {
+  color: #e8e6e1;
+  border-color: #3a4352;
+}
+
+.modal-option {
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border: 1px solid #232a36;
+  border-radius: 12px;
+  background: #12161d;
+}
+
+.modal-option:first-of-type {
+  border-color: #4a3f22;
+  background: #17140d;
+}
+
+.option-title {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #e2b657;
+}
+
+.option-note {
+  margin: 0 0 10px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: #8d97a8;
+}
+
+.option-note code,
+.requires code {
+  background: #0d1016;
+  border: 1px solid #232a36;
+  border-radius: 5px;
+  padding: 1px 5px;
+  font-size: 12px;
+  color: #cfd6e4;
+}
+
+.modal-option .downloads {
+  margin: 0 0 10px;
+}
+
+.modal-option .requires {
+  margin: 0;
+}
+
+/* a quiet text button for opening the pop-up from the start screen */
+.get-prism {
+  margin: 18px 0 0;
+}
+
+.link-button {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: #7d8798;
+  font-size: 12.5px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.link-button:hover {
+  color: #e2b657;
+}
+
 /* the macOS one-liner: the only route that opens with no Gatekeeper prompt */
 .terminal {
   margin: 0 0 14px;

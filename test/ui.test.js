@@ -389,6 +389,8 @@ test("without Live mode a Cloudflare block explains how to get through", async (
     window.document.getElementById("dl-mac").getAttribute("href"),
     require("../lib/desktop").DOWNLOADS.mac.url
   );
+  // and that button is a way into the download pop-up, not a dead end
+  assert.equal(window.document.getElementById("dl-mac").hasAttribute("data-download-open"), true);
   dom.window.close();
 });
 
@@ -418,13 +420,15 @@ test("a hosted copy shows working download links for both platforms", async () =
   await tick(60);
 
   const { DOWNLOADS } = require("../lib/desktop");
+  const absolute = (url) => new URL(url, window.location.origin).href;
 
-  // the banner offers a way out as soon as the app boots
+  // the banner offers a way out as soon as the app boots, and it opens the
+  // download pop-up rather than jumping straight to a file
   const bannerLink = window.document.querySelector(".banner-link");
   assert.ok(bannerLink, "expected a download link in the banner");
   assert.equal(bannerLink.hidden, false);
-  assert.equal(bannerLink.href, DOWNLOADS.mac.url);
-  assert.equal(bannerLink.target, "_blank");
+  assert.equal(bannerLink.href, absolute(DOWNLOADS.mac.url));
+  assert.equal(bannerLink.hasAttribute("data-download-open"), true);
 
   // and the "live unavailable" card is explicit about both platforms
   const mac = window.document.getElementById("dl-mac");
@@ -433,6 +437,9 @@ test("a hosted copy shows working download links for both platforms", async () =
   assert.equal(win.getAttribute("href"), DOWNLOADS.windows.url);
   assert.match(mac.textContent, /Download for Mac/);
   assert.match(win.textContent, /Download for Windows/);
+  // the href stays so the button still works without JavaScript
+  assert.equal(mac.hasAttribute("download"), true);
+  assert.equal(win.hasAttribute("download"), true);
 
   // and the card explains why the hosted copy cannot do it itself
   window.postMessage({ type: "prism-blocked", vendor: "Cloudflare", url: "https://reddit.com/" }, "*");
@@ -459,7 +466,11 @@ test("the bot wall on a hosted copy points at the downloads", async () => {
 
   const bannerLink = window.document.querySelector(".banner-link");
   assert.ok(bannerLink && !bannerLink.hidden, "expected a download link next to the wall explanation");
-  assert.equal(bannerLink.href, require("../lib/desktop").DOWNLOADS.mac.url);
+  assert.equal(
+    bannerLink.href,
+    new URL(require("../lib/desktop").DOWNLOADS.mac.url, window.location.origin).href
+  );
+  assert.equal(bannerLink.hasAttribute("data-download-open"), true);
   assert.match(window.document.getElementById("banner-text").textContent, /blocks the hosted proxy|blocks the proxy engine/);
   dom.window.close();
 });
@@ -472,5 +483,74 @@ test("a local install is not nagged with download links", async () => {
 
   const bannerLink = window.document.querySelector(".banner-link");
   assert.ok(!bannerLink || bannerLink.hidden, "a local install should not be told to download Prism");
+  dom.window.close();
+});
+
+test("clicking Download opens a pop-up with the command and the zips", async () => {
+  if (!JSDOM) return;
+  const dom = makeUi(false, { hosted: true });
+  const { window } = dom;
+  await tick(60);
+
+  const doc = window.document;
+  const modal = doc.getElementById("download-modal");
+  // nothing is in the way until you ask for a download
+  assert.equal(modal.hidden, true);
+
+  // the button the user actually presses
+  doc.getElementById("dl-mac").click();
+  assert.equal(modal.hidden, false, "clicking Download opens the pop-up");
+
+  // it shows the Terminal command, ready to copy, pointing at this origin
+  const command = doc.getElementById("install-cmd").textContent.trim();
+  assert.equal(command, `curl -fsSL ${window.location.origin}/install.sh | bash`);
+
+  // and both zip files, as real downloads
+  const mac = doc.getElementById("modal-dl-mac");
+  const win = doc.getElementById("modal-dl-windows");
+  assert.equal(mac.getAttribute("href"), "/download/mac");
+  assert.equal(win.getAttribute("href"), "/download/windows");
+  assert.equal(mac.hasAttribute("download"), true);
+  assert.equal(win.hasAttribute("download"), true);
+
+  // Escape closes it and focus goes back to the button that opened it
+  const event = new window.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+  doc.dispatchEvent(event);
+  assert.equal(modal.hidden, true);
+  // jsdom does not move focus the way a browser does, so the focus-restore
+  // behaviour is only checked here for the state that does matter: the panel is
+  // hidden and the page is scrollable again
+  assert.equal(doc.body.classList.contains("modal-open"), false);
+
+  // and so does the close button / backdrop
+  doc.getElementById("dl-windows").click();
+  assert.equal(modal.hidden, false);
+  doc.getElementById("download-close").click();
+  assert.equal(modal.hidden, true);
+
+  doc.getElementById("dl-mac").click();
+  assert.equal(modal.hidden, false);
+  doc.querySelector(".modal-backdrop").click();
+  assert.equal(modal.hidden, true);
+
+  dom.window.close();
+});
+
+test("the start screen can open the pop-up before anything fails", async () => {
+  if (!JSDOM) return;
+  const dom = makeUi(false, { hosted: true });
+  const { window } = dom;
+  await tick(60);
+
+  const doc = window.document;
+  const opener = doc.querySelector("#start [data-download-open]");
+  assert.ok(opener, "expected a download trigger on the start screen");
+  assert.equal(doc.getElementById("download-modal").hidden, true);
+
+  opener.click();
+  assert.equal(doc.getElementById("download-modal").hidden, false);
+  // the command carries a real origin, so it can be pasted as-is
+  assert.match(doc.getElementById("install-cmd").textContent, /curl -fsSL http:\/\/127\.0\.0\.1:4321\/install\.sh \| bash/);
+
   dom.window.close();
 });
