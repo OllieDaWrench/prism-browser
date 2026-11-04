@@ -9,6 +9,7 @@ const { handleProxy, tunnelWebSocket, errorPage, targetFromLocal, proxyPath } = 
 const { upgrade: wsUpgrade } = require("./lib/ws");
 const { LiveBrowser, LiveSession } = require("./lib/live");
 const { handleDownload } = require("./lib/downloads");
+const { sendAppDownload } = require("./lib/app-downloads");
 const { installerScript } = require("./lib/installer");
 const { openExternal } = require("./lib/opener");
 const auth = require("./lib/auth");
@@ -189,6 +190,12 @@ app.post("/api/auth/users", async (req, res) => {
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
   }
+});
+
+app.all("/download/app/:app/:platform", (req, res) => {
+  // These are whitelisted, free third-party installers. Large binaries are
+  // handed off to their official direct-file URLs instead of buffered by Vercel.
+  sendAppDownload(req, res, req.params.app, req.params.platform);
 });
 
 app.all("/download/:platform", (req, res) => {
